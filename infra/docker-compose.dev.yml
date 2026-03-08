@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  postgres:
+    volumes:
+      - ./scripts/seed-dev.sh:/docker-entrypoint-initdb.d/seed-dev.sh
+
+  # Development-specific configurations can be added here
+  # - Volume mounts for hot reload
+  # - Debug ports
+  # - Development-only environment variables
