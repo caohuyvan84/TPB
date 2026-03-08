@@ -16,8 +16,9 @@
     "strict": true,
     "target": "ES2022",
     "types": ["vite/client"],
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["src/*"]
     }
   },
   "files": [],
