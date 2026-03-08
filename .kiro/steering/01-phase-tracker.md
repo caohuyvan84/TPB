@@ -52,7 +52,7 @@ inclusion: always
 
 **Goal:** Agent Desktop with real data - no more mock data for core flows
 
-**Status:** 🟡 In Progress (1/73 tasks completed)
+**Status:** 🟡 In Progress (12/73 tasks completed - 16%)
 
 **Go-Live 1 Milestone:** Agent Desktop with real backend APIs
 
@@ -60,20 +60,20 @@ inclusion: always
 
 **Sprint 1-2: Authentication & Identity (MS-1)** - 🟡 In Progress
 - [x] Task 1.1: Create TypeORM migrations for Identity Service database schema
-- [ ] Task 1.2: Implement User, Role, Permission, RefreshToken entity models
+- [x] Task 1.2: Implement User, Role, Permission, RefreshToken entity models
 - [ ] Task 1.3: Write unit tests for entity models
-- [ ] Task 2.1: Implement password hashing with bcrypt
-- [ ] Task 2.2: Implement JWT token generation with RS256
-- [ ] Task 2.3: Implement login endpoint with credential validation
-- [ ] Task 2.4: Implement MFA TOTP setup and verification
-- [ ] Task 2.5: Implement refresh token rotation flow
-- [ ] Task 2.6: Implement logout endpoint with token revocation
+- [x] Task 2.1: Implement password hashing with bcrypt
+- [x] Task 2.2: Implement JWT token generation with RS256
+- [x] Task 2.3: Implement login endpoint with credential validation
+- [x] Task 2.4: Implement MFA TOTP setup and verification
+- [x] Task 2.5: Implement refresh token rotation flow
+- [x] Task 2.6: Implement logout endpoint with token revocation
 - [ ] Task 2.7: Write unit tests for AuthService
-- [ ] Task 3.1: Implement JWT authentication guard
-- [ ] Task 3.2: Implement RBAC permissions guard
-- [ ] Task 3.3: Seed initial roles and permissions data
+- [x] Task 3.1: Implement JWT authentication guard
+- [x] Task 3.2: Implement RBAC permissions guard
+- [x] Task 3.3: Seed initial roles and permissions data
 - [ ] Task 3.4: Write integration tests for authentication endpoints
-- [ ] Task 4.1: Implement GET /api/v1/users/me endpoint
+- [x] Task 4.1: Implement GET /api/v1/users/me endpoint
 - [ ] Task 4.2: Implement session tracking and audit logging
 - [ ] Task 4.3: Configure Redis for token blacklist and caching
 - [ ] Task 5.1: Configure Kong API Gateway for Identity Service
