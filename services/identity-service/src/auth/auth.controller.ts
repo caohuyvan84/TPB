@@ -1,6 +1,6 @@
-import { Controller, Post, Body, Req, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, Req, HttpCode, HttpStatus, Get, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { LoginDto, RefreshTokenDto } from './dto/auth.dto';
+import { LoginDto, RefreshTokenDto, MfaVerifyDto } from './dto/auth.dto';
 import { Request } from 'express';
 
 @Controller('auth')
@@ -27,5 +27,21 @@ export class AuthController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(@Body() refreshDto: RefreshTokenDto) {
     await this.authService.logout(refreshDto.refreshToken);
+  }
+
+  @Post('mfa/setup')
+  @HttpCode(HttpStatus.OK)
+  async setupMfa(@Req() req: any) {
+    // TODO: Add JWT guard
+    const userId = req.user?.sub;
+    return this.authService.setupMfa(userId);
+  }
+
+  @Post('mfa/verify')
+  @HttpCode(HttpStatus.OK)
+  async verifyMfa(@Body() mfaDto: MfaVerifyDto, @Req() req: Request) {
+    const ip = req.ip;
+    const userAgent = req.headers['user-agent'];
+    return this.authService.verifyMfa(mfaDto.token, mfaDto.code, ip, userAgent);
   }
 }

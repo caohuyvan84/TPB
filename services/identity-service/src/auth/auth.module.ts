@@ -7,6 +7,7 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { PasswordService } from './password.service';
 import { TokenService } from './token.service';
+import { MfaService } from './mfa.service';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { TokenService } from './token.service';
     ConfigModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, PasswordService, TokenService],
+  providers: [AuthService, PasswordService, TokenService, MfaService],
   exports: [AuthService, TokenService],
 })
 export class AuthModule {}

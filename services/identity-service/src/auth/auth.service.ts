@@ -4,6 +4,7 @@ import { Repository, LessThan } from 'typeorm';
 import { User, RefreshToken, LoginAttempt } from '../entities';
 import { PasswordService } from './password.service';
 import { TokenService, JwtPayload } from './token.service';
+import { MfaService } from './mfa.service';
 import { LoginDto } from './dto/auth.dto';
 import * as crypto from 'crypto';
 
@@ -18,6 +19,7 @@ export class AuthService {
     private loginAttemptRepository: Repository<LoginAttempt>,
     private passwordService: PasswordService,
     private tokenService: TokenService,
+    private mfaService: MfaService,
   ) {}
 
   async login(loginDto: LoginDto, ip: string, userAgent: string) {
@@ -175,6 +177,58 @@ export class AuthService {
   async cleanupExpiredTokens() {
     await this.refreshTokenRepository.delete({
       expiresAt: LessThan(new Date()),
+    });
+  }
+
+  async setupMfa(userId: string) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const { secret, qrCode } = this.mfaService.generateSecret(user.username);
+    const qrCodeDataUrl = await this.mfaService.generateQRCode(qrCode);
+
+    // Store secret temporarily (will be confirmed after verification)
+    user.mfaSecret = secret;
+    await this.userRepository.save(user);
+
+    return {
+      secret,
+      qrCode: qrCodeDataUrl,
+    };
+  }
+
+  async verifyMfa(mfaToken: string, code: string, ip: string, userAgent: string) {
+    const payload = this.tokenService.verifyAccessToken(mfaToken);
+    const user = await this.userRepository.findOne({
+      where: { id: payload.sub },
+      relations: ['roles'],
+    });
+
+    if (!user || !user.mfaSecret) {
+      throw new Error('Invalid MFA setup');
+    }
+
+    const isValid = this.mfaService.verifyToken(user.mfaSecret, code);
+    if (!isValid) {
+      throw new Error('Invalid MFA code');
+    }
+
+    // Enable MFA if not already enabled
+    if (!user.mfaEnabled) {
+      user.mfaEnabled = true;
+      await this.userRepository.save(user);
+    }
+
+    // Generate full tokens
+    return this.generateTokens(user, ip, userAgent);
+  }
+
+  async disableMfa(userId: string) {
+    await this.userRepository.update(userId, {
+      mfaEnabled: false,
+      mfaSecret: null,
     });
   }
 }
