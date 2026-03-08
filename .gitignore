@@ -46,4 +46,4 @@ temp/
 .nx/
 
 vite.config.*.timestamp*
-vitest.config.*.timestamp*
+vitest.config.*.timestamp*jwt-*.pem
