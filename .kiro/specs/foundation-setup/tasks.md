@@ -163,13 +163,13 @@ This is a 2-week sprint focused on infrastructure, tooling, and project structur
     - Create basic App.tsx structure
     - _Requirements: 1.5_
 
-  - [-] 1.5 Create shared-types package
+  - [x] 1.5 Create shared-types package
     - Generate library: `nx g @nx/js:lib shared-types`
     - Extract TypeScript interfaces from existing contexts
     - Create index.ts with exports
     - _Requirements: 1.6_
 
-  - [ ] 1.6 Create shared-dto package with Zod schemas
+  - [-] 1.6 Create shared-dto package with Zod schemas
     - Generate library: `nx g @nx/js:lib shared-dto`
     - Install Zod dependency
     - Create initial DTO schemas
