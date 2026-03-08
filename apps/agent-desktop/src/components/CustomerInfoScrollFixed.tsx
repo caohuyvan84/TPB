@@ -1,18 +1,18 @@
 import { useState, useEffect } from "react";
-import { Interaction } from "@/components/useInteractionStats";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { InteractionPreview } from "@/components/InteractionPreview";
-import { CoreBFSI } from "@/components/CoreBFSI";
-import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
+import { Interaction } from './useInteractionStats';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Badge } from './ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { InteractionPreview } from './InteractionPreview';
+import { CoreBFSI } from './CoreBFSI';
+import { Separator } from './ui/separator';
+import { Textarea } from './ui/textarea';
 
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "sonner@2.0.3";
+import { Label } from './ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { toast } from "sonner"; // Fix: remove version from import path
 import { 
   Search, 
   Filter, 
@@ -967,7 +967,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={(e) => {
+                                onClick={(e: React.MouseEvent) => {
                                   e.stopPropagation();
                                   handleViewTicket(ticket.id);
                                 }}
@@ -1045,7 +1045,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <Label htmlFor="ticket-priority">Độ ưu tiên</Label>
-                      <Select value={ticketFormData.priority} onValueChange={(value) => updateTicketFormData('priority', value)}>
+                      <Select value={ticketFormData.priority} onValueChange={(value: string) => updateTicketFormData('priority', value)}>
                         <SelectTrigger className="w-full"><SelectValue placeholder="Chọn độ ưu tiên" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="low">Thấp</SelectItem>
@@ -1057,7 +1057,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="ticket-category">Danh mục <span className="text-red-500">*</span></Label>
-                      <Select value={ticketFormData.category} onValueChange={(value) => updateTicketFormData('category', value)}>
+                      <Select value={ticketFormData.category} onValueChange={(value: string) => updateTicketFormData('category', value)}>
                         <SelectTrigger className="w-full"><SelectValue placeholder="Chọn danh mục" /></SelectTrigger>
                         <SelectContent>{categories.map((category) => (<SelectItem key={category} value={category}>{category}</SelectItem>))}</SelectContent>
                       </Select>
@@ -1066,7 +1066,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <Label htmlFor="ticket-department">Phòng ban</Label>
-                      <Select value={ticketFormData.department} onValueChange={(value) => updateTicketFormData('department', value)}>
+                      <Select value={ticketFormData.department} onValueChange={(value: string) => updateTicketFormData('department', value)}>
                         <SelectTrigger className="w-full"><SelectValue placeholder="Chọn phòng ban" /></SelectTrigger>
                         <SelectContent>{departments.map((department) => (<SelectItem key={department} value={department}>{department}</SelectItem>))}</SelectContent>
                       </Select>
@@ -1082,14 +1082,14 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-2">
                         <Label htmlFor="ticket-agent" className="text-xs">Chọn Agent</Label>
-                        <Select value={ticketFormData.assignedAgent} onValueChange={(value) => {updateTicketFormData('assignedAgent', value); if (value) updateTicketFormData('assignedTeam', '');}}>
+                        <Select value={ticketFormData.assignedAgent} onValueChange={(value: string) => {updateTicketFormData('assignedAgent', value); if (value) updateTicketFormData('assignedTeam', '');}}>
                           <SelectTrigger className="w-full h-9 text-xs"><SelectValue placeholder="Chọn agent" /></SelectTrigger>
                           <SelectContent>{agents.map((agent) => (<SelectItem key={agent.id} value={agent.id}><div className="flex items-center justify-between w-full"><span className="text-xs">{agent.name}</span></div></SelectItem>))}</SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="ticket-team" className="text-xs">Hoặc chọn Team</Label>
-                        <Select value={ticketFormData.assignedTeam} onValueChange={(value) => {updateTicketFormData('assignedTeam', value); if (value) updateTicketFormData('assignedAgent', '');}}>
+                        <Select value={ticketFormData.assignedTeam} onValueChange={(value: string) => {updateTicketFormData('assignedTeam', value); if (value) updateTicketFormData('assignedAgent', '');}}>
                           <SelectTrigger className="w-full h-9 text-xs"><SelectValue placeholder="Chọn team" /></SelectTrigger>
                           <SelectContent>{teams.map((team) => (<SelectItem key={team.id} value={team.id}><div className="flex items-center justify-between w-full"><span className="text-xs">{team.name}</span></div></SelectItem>))}</SelectContent>
                         </Select>
@@ -1530,7 +1530,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
             {/* Truy vấn core Tab */}
             <TabsContent value="bfsi" className="mt-3 h-full flex flex-col data-[state=active]:flex">
               <div className="flex-1 overflow-hidden">
-                <CoreBFSI />
+                <CoreBFSI customerId={mockCustomer.id} />
               </div>
             </TabsContent>
 

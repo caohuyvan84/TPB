@@ -1,14 +1,10 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+import { Checkbox } from './ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Label } from './ui/label';
+import { Separator } from './ui/separator';
 import {
   Filter,
   CheckCircle2,
@@ -26,14 +22,18 @@ import {
   Phone,
   Mail,
 } from "lucide-react";
-import { cn } from "@/components/ui/utils";
-import { DateRangeFilter, DateRangeValue } from "@/components/DateRangeFilter";
+import { cn } from './ui/utils';
+import { DateRangeFilter, DateRangeValue } from './DateRangeFilter';
 
 // Chat specific types
-export type ChatSLAFilterType = "met" | "near-breach" | "breached";
+export type ChatSLAFilterType = "met" | "near-breach" | "breached" | "waiting";
 export type ChatStatusFilterType = "all" | "active" | "waiting" | "closed";
-export type ChatChannelType = "web" | "mobile" | "facebook" | "zalo";
-export type ChatSortType = "none" | "wait-time-desc" | "wait-time-asc" | "sla-priority";
+export type ChatChannelType = "web" | "mobile" | "facebook" | "zalo" | "livechat";
+export type ChatSortType = "none" | "wait-time-desc" | "wait-time-asc" | "sla-priority" | 
+  "waiting-longest-desc" | "waiting-longest-asc" | 
+  "sla-nearest-asc" | "sla-nearest-desc" | 
+  "start-time-desc" | "start-time-asc" | 
+  "channel-asc" | "channel-desc"; // Fix: add all sort types used in the component
 
 // Call specific types
 export type CallStatusFilterType = "all" | "ringing" | "talking" | "hold" | "ended";
@@ -93,7 +93,7 @@ export function ChatAdvancedFilters({
   const [isOpen, setIsOpen] = useState(false);
 
   const handleFilterChange = (key: keyof ChatFilters, value: any) => {
-    if (onChatFiltersChange) {
+    if (onChatFiltersChange && chatFilters) { // Fix: check chatFilters is defined
       onChatFiltersChange({
         ...chatFilters,
         [key]: value,
@@ -137,7 +137,7 @@ export function ChatAdvancedFilters({
     let newSort: ChatSortType = "none";
 
     if (sortType === "waiting") {
-      if (currentSort === "none" || !currentSort.startsWith("waiting")) {
+      if (currentSort === "none" || !currentSort?.startsWith("waiting")) { // Fix: add optional chaining
         newSort = "waiting-longest-desc";
       } else if (currentSort === "waiting-longest-desc") {
         newSort = "waiting-longest-asc";
@@ -145,7 +145,7 @@ export function ChatAdvancedFilters({
         newSort = "none";
       }
     } else if (sortType === "sla") {
-      if (currentSort === "none" || !currentSort.startsWith("sla")) {
+      if (currentSort === "none" || !currentSort?.startsWith("sla")) { // Fix: add optional chaining
         newSort = "sla-nearest-asc";
       } else if (currentSort === "sla-nearest-asc") {
         newSort = "sla-nearest-desc";
@@ -153,7 +153,7 @@ export function ChatAdvancedFilters({
         newSort = "none";
       }
     } else if (sortType === "time") {
-      if (currentSort === "none" || !currentSort.startsWith("start-time")) {
+      if (currentSort === "none" || !currentSort?.startsWith("start-time")) { // Fix: add optional chaining
         newSort = "start-time-desc";
       } else if (currentSort === "start-time-desc") {
         newSort = "start-time-asc";
@@ -161,7 +161,7 @@ export function ChatAdvancedFilters({
         newSort = "none";
       }
     } else if (sortType === "channel") {
-      if (currentSort === "none" || !currentSort.startsWith("channel")) {
+      if (currentSort === "none" || !currentSort?.startsWith("channel")) { // Fix: add optional chaining
         newSort = "channel-asc";
       } else if (currentSort === "channel-asc") {
         newSort = "channel-desc";
@@ -204,10 +204,10 @@ export function ChatAdvancedFilters({
   const isSortActive = (sortType: "waiting" | "sla" | "time" | "channel") => {
     const currentSort = chatFilters?.sortBy;
 
-    if (sortType === "waiting") return currentSort.startsWith("waiting");
-    if (sortType === "sla") return currentSort.startsWith("sla");
-    if (sortType === "time") return currentSort.startsWith("start-time");
-    if (sortType === "channel") return currentSort.startsWith("channel");
+    if (sortType === "waiting") return currentSort?.startsWith("waiting") || false; // Fix: add optional chaining and default
+    if (sortType === "sla") return currentSort?.startsWith("sla") || false;
+    if (sortType === "time") return currentSort?.startsWith("start-time") || false;
+    if (sortType === "channel") return currentSort?.startsWith("channel") || false;
 
     return false;
   };
@@ -307,7 +307,7 @@ export function ChatAdvancedFilters({
               Khoảng thời gian
             </Label>
             <DateRangeFilter
-              value={chatFilters?.dateRange}
+              value={chatFilters?.dateRange || { preset: 'all', from: undefined, to: undefined }} // Fix: provide complete default value with preset
               onChange={(value) => handleFilterChange("dateRange", value)}
               compact={false}
             />
@@ -415,12 +415,12 @@ export function ChatAdvancedFilters({
                       className={cn(
                         isChecked && "border-[#155DFC] bg-[#155DFC]"
                       )}
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={(e: React.MouseEvent) => e.stopPropagation()}
                     />
                     <Label
                       htmlFor={`sla-${sla.value}`}
                       className="flex-1 flex items-center gap-2 cursor-pointer text-sm"
-                      onClick={(e) => e.preventDefault()}
+                      onClick={(e: React.MouseEvent) => e.preventDefault()}
                     >
                       <Icon className={cn(
                         "h-4 w-4",
@@ -576,12 +576,12 @@ export function ChatAdvancedFilters({
                       className={cn(
                         isChecked && "border-[#155DFC] bg-[#155DFC]"
                       )}
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={(e: React.MouseEvent) => e.stopPropagation()}
                     />
                     <Label
                       htmlFor={`channel-${ch.value}`}
                       className="flex-1 flex items-center gap-2 cursor-pointer text-sm"
-                      onClick={(e) => e.preventDefault()}
+                      onClick={(e: React.MouseEvent) => e.preventDefault()}
                     >
                       <Icon className="h-4 w-4 text-muted-foreground" />
                       <span className={cn(isChecked && "font-medium")}>

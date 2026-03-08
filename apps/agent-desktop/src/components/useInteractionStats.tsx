@@ -46,6 +46,12 @@ export interface Interaction {
   source?: string;
   duration?: string | null;
   isVIP?: boolean;
+  chatSLA?: {
+    status?: string;
+    sessionStatus?: string;
+    slaRemainingSeconds?: number;
+    waitingSeconds?: number;
+  };
   [key: string]: unknown;
 }
 
@@ -97,12 +103,12 @@ export function useInteractionStats(interactions: Interaction[]) {
       }
 
       // Status stats
-      if (interaction.status && acc.byStatus.hasOwnProperty(interaction.status)) {
+      if (interaction.status && Object.prototype.hasOwnProperty.call(acc.byStatus, interaction.status)) {
         acc.byStatus[interaction.status as keyof typeof acc.byStatus]++;
       }
 
       // Priority stats
-      if (interaction.priority && acc.byPriority.hasOwnProperty(interaction.priority)) {
+      if (interaction.priority && Object.prototype.hasOwnProperty.call(acc.byPriority, interaction.priority)) {
         acc.byPriority[interaction.priority as keyof typeof acc.byPriority]++;
       }
 

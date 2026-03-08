@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { EmailReplyInline } from "@/components/EmailReplyInline";
+import { Button } from './ui/button';
+import { Card, CardContent, CardHeader } from './ui/card';
+import { Badge } from './ui/badge';
+import { Separator } from './ui/separator';
+import { EmailReplyInline } from './EmailReplyInline';
 import { 
   ChevronDown,
   ChevronUp,
@@ -23,12 +23,7 @@ import {
   Forward,
   MoreHorizontal
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 
 interface EmailMessage {
   id: string;
@@ -264,7 +259,7 @@ export function EmailThread({ messages, className = "", onReply }: EmailThreadPr
                           {message.cc.map((recipient, i) => (
                             <span key={i}>
                               {recipient.name} &lt;{recipient.email}&gt;
-                              {i < message.cc.length - 1 && ', '}
+                              {message.cc && i < message.cc.length - 1 && ', '}
                             </span>
                           ))}
                         </div>
@@ -428,6 +423,7 @@ export function EmailThread({ messages, className = "", onReply }: EmailThreadPr
                   interaction={createInteractionFromMessage(message)}
                   mode={replyMode}
                   onClose={() => setReplyingToMessageId(null)}
+                  onCancel={() => setReplyingToMessageId(null)}
                 />
               </div>
             )}

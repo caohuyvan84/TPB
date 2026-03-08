@@ -1,26 +1,13 @@
 import { useState } from "react";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle,
-  DialogDescription, 
-  DialogFooter 
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Textarea } from './ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Badge } from './ui/badge';
+import { Separator } from './ui/separator';
+import { Card, CardContent } from './ui/card';
 import { 
   FileText, 
   Plus, 
@@ -43,7 +30,7 @@ import {
   MapPin,
   PhoneCall
 } from "lucide-react";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner"; // Fix: remove version from import path
 
 interface CreateTicketDialogProps {
   open: boolean;
@@ -636,7 +623,7 @@ export function CreateTicketDialog({ open, onOpenChange, interaction, contact, q
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Danh mục</Label>
-              <Select value={ticketData.category} onValueChange={(value) => updateTicketData('category', value)}>
+              <Select value={ticketData.category} onValueChange={(value: string) => updateTicketData('category', value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Chọn danh mục" />
                 </SelectTrigger>
@@ -652,7 +639,7 @@ export function CreateTicketDialog({ open, onOpenChange, interaction, contact, q
 
             <div>
               <Label>Độ ưu tiên</Label>
-              <Select value={ticketData.priority} onValueChange={(value) => updateTicketData('priority', value)}>
+              <Select value={ticketData.priority} onValueChange={(value: string) => updateTicketData('priority', value)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -670,7 +657,7 @@ export function CreateTicketDialog({ open, onOpenChange, interaction, contact, q
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Bộ phận xử lý</Label>
-              <Select value={ticketData.department} onValueChange={(value) => updateTicketData('department', value)}>
+              <Select value={ticketData.department} onValueChange={(value: string) => updateTicketData('department', value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Chọn bộ phận" />
                 </SelectTrigger>

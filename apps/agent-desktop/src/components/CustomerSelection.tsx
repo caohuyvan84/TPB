@@ -1,18 +1,11 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { ScrollArea } from './ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { 
   User, 
   Phone, 
@@ -29,7 +22,7 @@ import {
   LayoutGrid,
   TableIcon,
 } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
+import { Separator } from './ui/separator';
 
 interface Customer {
   cif: string;
@@ -537,7 +530,7 @@ export function CustomerSelection({ phoneNumber, onSelectCustomer }: CustomerSel
                           size="sm"
                           variant="ghost"
                           className="h-8 text-[#155DFC] hover:text-[#0f4ad1] hover:bg-[#155DFC]/10"
-                          onClick={(e) => {
+                          onClick={(e: React.MouseEvent) => {
                             e.stopPropagation();
                             onSelectCustomer(customer);
                           }}

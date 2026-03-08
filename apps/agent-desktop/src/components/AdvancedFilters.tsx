@@ -1,21 +1,11 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+import { Checkbox } from './ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Label } from './ui/label';
+import { Separator } from './ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import {
   Filter,
   CheckCircle2,
@@ -31,13 +21,13 @@ import {
   Mail,
   MessageCircle,
 } from "lucide-react";
-import { cn } from "@/components/ui/utils";
-import { DateRangeFilter, DateRangeValue } from "@/components/DateRangeFilter";
+import { cn } from './ui/utils';
+import { DateRangeFilter, DateRangeValue } from './DateRangeFilter';
 
 // Chat specific types
-export type ChatSLAFilterType = "met" | "near-breach" | "breached";
+export type ChatSLAFilterType = "met" | "near-breach" | "breached" | "waiting";
 export type ChatStatusFilterType = "all" | "active" | "waiting" | "closed";
-export type ChatChannelType = "web" | "mobile" | "facebook" | "zalo";
+export type ChatChannelType = "web" | "mobile" | "facebook" | "zalo" | "livechat";
 export type ChatSortType = "none" | "waiting-longest-desc" | "waiting-longest-asc" | "sla-nearest-asc" | "sla-nearest-desc" | "start-time-desc" | "start-time-asc" | "channel-asc" | "channel-desc";
 
 // Call specific types
@@ -620,7 +610,7 @@ export function AdvancedFilters({
                 </Label>
                 <Select
                   value={callFilters.callStatus}
-                  onValueChange={(value) => handleCallFilterChange("callStatus", value)}
+                  onValueChange={(value: string) => handleCallFilterChange("callStatus", value)}
                 >
                   <SelectTrigger className="h-9">
                     <SelectValue />
@@ -644,7 +634,7 @@ export function AdvancedFilters({
                 </Label>
                 <Select
                   value={callFilters.direction}
-                  onValueChange={(value) => handleCallFilterChange("direction", value)}
+                  onValueChange={(value: string) => handleCallFilterChange("direction", value)}
                 >
                   <SelectTrigger className="h-9">
                     <SelectValue />
@@ -666,7 +656,7 @@ export function AdvancedFilters({
                 </Label>
                 <Select
                   value={callFilters.sortBy}
-                  onValueChange={(value) => handleCallFilterChange("sortBy", value)}
+                  onValueChange={(value: string) => handleCallFilterChange("sortBy", value)}
                 >
                   <SelectTrigger className="h-9">
                     <SelectValue />
@@ -707,7 +697,7 @@ export function AdvancedFilters({
                 </Label>
                 <Select
                   value={emailFilters.emailStatus}
-                  onValueChange={(value) => handleEmailFilterChange("emailStatus", value)}
+                  onValueChange={(value: string) => handleEmailFilterChange("emailStatus", value)}
                 >
                   <SelectTrigger className="h-9">
                     <SelectValue />
@@ -731,7 +721,7 @@ export function AdvancedFilters({
                 </Label>
                 <Select
                   value={emailFilters.priority}
-                  onValueChange={(value) => handleEmailFilterChange("priority", value)}
+                  onValueChange={(value: string) => handleEmailFilterChange("priority", value)}
                 >
                   <SelectTrigger className="h-9">
                     <SelectValue />
@@ -754,7 +744,7 @@ export function AdvancedFilters({
                 </Label>
                 <Select
                   value={emailFilters.sortBy}
-                  onValueChange={(value) => handleEmailFilterChange("sortBy", value)}
+                  onValueChange={(value: string) => handleEmailFilterChange("sortBy", value)}
                 >
                   <SelectTrigger className="h-9">
                     <SelectValue />

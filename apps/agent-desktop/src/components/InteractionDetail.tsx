@@ -1,32 +1,26 @@
 import { useState, useEffect } from "react";
-import { Interaction } from "@/components/useInteractionStats";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { EmailReplyInline } from "@/components/EmailReplyInline";
-import { EmailThread } from "@/components/EmailThread";
-import { KnowledgeBaseSearch } from "@/components/KnowledgeBaseSearch";
-import { AIAssistantChat } from "@/components/AIAssistantChat";
-import { CallRecordingPlayer } from "@/components/CallRecordingPlayer";
-import { CallTimeline } from "@/components/CallTimeline";
-import { CallNotes } from "@/components/CallNotes";
-import { InformationQuery } from "@/components/InformationQuery";
-import { CustomerSelection } from "@/components/CustomerSelection";
-import { Separator } from "@/components/ui/separator";
-import { ChatTimeline, ChatSession, ChatMessage } from "@/components/ChatTimeline";
-import { ChatSessionHeader } from "@/components/ChatSessionHeader";
-import { SLAStatus } from "@/components/ChatSLABadge";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
+import { Interaction } from './useInteractionStats';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Badge } from './ui/badge';
+import { EmailReplyInline } from './EmailReplyInline';
+import { EmailThread } from './EmailThread';
+import { KnowledgeBaseSearch } from './KnowledgeBaseSearch';
+import { AIAssistantChat } from './AIAssistantChat';
+import { CallRecordingPlayer } from './CallRecordingPlayer';
+import { CallTimeline } from './CallTimeline';
+import { CallNotes } from './CallNotes';
+import { InformationQuery } from './InformationQuery';
+import { CustomerSelection } from './CustomerSelection';
+import { Separator } from './ui/separator';
+import { ChatTimeline, ChatSession, ChatMessage } from './ChatTimeline';
+import { ChatSessionHeader } from './ChatSessionHeader';
+import { SLAStatus } from './ChatSLABadge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Label } from './ui/label';
 import { 
   Phone, 
   PhoneOff, 
@@ -616,6 +610,7 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
     description: '',
     priority: 'medium',
     status: 'new',
+    category: '',
     department: '',
     assignedAgent: '',
     assignedTeam: '',
@@ -906,9 +901,11 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
       }
       
       setTicketData({
+        classification: '',
         title: `Ticket từ ${interaction.type}: ${interaction.subject}`,
         description: `Khách hàng: ${interaction.customerName}\\nLoại tương tác: ${interaction.type}\\nNội dung: ${interaction.subject}\\n\\nMô tả chi tiết:\\n`,
         priority: interaction.priority || 'medium',
+        status: 'new',
         category: category,
         department: department,
         assignedAgent: '',
@@ -1497,14 +1494,16 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
   };
 
   // Enhanced Call Controls - Support both active and completed calls
-  const renderCallControls = () => {
+  const renderCallControls = (): React.ReactElement => {
     const isCallCompleted = interaction.status === 'completed' || interaction.status === 'resolved';
     
     if (isCallCompleted) {
       // Show recording player and timeline for completed calls
+      const recording = interaction.recording;
+      const hasRecording = recording && typeof recording === 'object' && 'url' in recording;
+      
       return (
         <div className="space-y-4">
-          {/* Call Summary */}
           <div className="text-center">
             <Badge className="bg-muted text-foreground mb-2">
               Cuộc gọi đã kết thúc
@@ -1512,22 +1511,19 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
             <p className="text-sm text-muted-foreground">Tổng thời gian: {interaction.duration}</p>
           </div>
 
-          {/* Call Recording Player */}
-          {interaction.recording && (
+          {hasRecording ? (
             <CallRecordingPlayer
-              recordingUrl={interaction.recording.url}
-              recordingDuration={interaction.recording.duration}
-              callDuration={interaction.duration}
-              quality={interaction.recording.quality}
+              recordingUrl={(recording as any).url as string}
+              recordingDuration={(recording as any).duration}
+              callDuration={interaction.duration || ''}
+              quality={(recording as any).quality}
             />
-          )}
+          ) : null}
 
-          {/* Call Timeline */}
           <CallTimeline 
-            totalDuration={interaction.duration}
+            totalDuration={interaction.duration || undefined}
           />
 
-          {/* Call Notes - Read Only for completed calls */}
           <CallNotes
             callId={interaction.id}
             isCallActive={false}
@@ -1722,19 +1718,19 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
                 <div className="flex items-center space-x-2 mb-2">
                   <h3 className="text-lg font-medium text-red-900">Cuộc gọi nhỡ</h3>
                   {interaction.isVIP && (
-                    <Crown className="h-4 w-4 text-yellow-600" title="Khách hàng VIP" />
+                    <Crown className="h-4 w-4 text-yellow-600" />
                   )}
                   <Badge className="bg-red-100 text-red-800 border-red-200">
-                    {getMissedCallReasonText(interaction.missedReason)}
+                    {getMissedCallReasonText(interaction.missedReason as string)}
                   </Badge>
                 </div>
                 <p className="text-red-700 mb-3">
-                  Cuộc gọi từ <strong>{interaction.customerName || interaction.customerPhone}</strong> vào lúc <strong>{formatTimestamp(interaction.timestamp)}</strong>
+                  Cuộc gọi từ <strong>{interaction.customerName || interaction.customerPhone}</strong> vào lúc <strong>{formatTimestamp(interaction.timestamp || '')}</strong>
                 </p>
                 <div className="flex items-center space-x-4 text-sm text-red-600">
                   <div className="flex items-center space-x-1">
                     <Clock className="h-4 w-4" />
-                    <span>Thời gian nhỡ: {formatTimestamp(interaction.timestamp)}</span>
+                    <span>Thời gian nhỡ: {formatTimestamp(interaction.timestamp || '')}</span>
                   </div>
                   <div className="flex items-center space-x-1">
                     <Phone className="h-4 w-4" />
@@ -1804,12 +1800,12 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
               <div className="flex justify-between items-center py-2 border-b border-border/50">
                 <span className="text-sm font-medium text-foreground/80">Lý do nhỡ cuộc gọi:</span>
                 <Badge className="bg-red-100 text-red-800 border-red-200">
-                  {getMissedCallReasonText(interaction.missedReason)}
+                  {getMissedCallReasonText(interaction.missedReason as string)}
                 </Badge>
               </div>
               <div className="flex justify-between items-center py-2 border-b border-border/50">
                 <span className="text-sm font-medium text-foreground/80">Thời gian gọi:</span>
-                <span className="text-sm text-foreground">{formatTimestamp(interaction.timestamp)}</span>
+                <span className="text-sm text-foreground">{formatTimestamp(interaction.timestamp || '')}</span>
               </div>
               <div className="flex justify-between items-center py-2 border-b border-border/50">
                 <span className="text-sm font-medium text-foreground/80">Nguồn cuộc gọi:</span>
@@ -1993,7 +1989,7 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
                         </div>
                         
                         <EmailThread
-                          messages={emailData.threadMessages}
+                          messages={(emailData.threadMessages || []) as any}
                           onReply={handleThreadMessageReply}
                         />
                       </div>
@@ -2223,9 +2219,7 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
             
             <TabsContent value="ai" className="mt-3 h-full overflow-hidden data-[state=active]:flex data-[state=active]:flex-col">
               <AIAssistantChat
-                interactionId={interaction.id}
-                interactionType={interaction.type}
-                customerName={interaction.customerName}
+                interaction={interaction}
                 onKnowledgeSearch={handleAIKnowledgeSearch}
               />
             </TabsContent>
@@ -2593,7 +2587,7 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
                         <Label htmlFor="ticket-classification">Phân loại</Label>
                         <Select
                           value={ticketData.classification}
-                          onValueChange={(value) => {
+                          onValueChange={(value: string) => {
                             updateTicketData('classification', value);
                             // Reset title when classification changes
                             updateTicketData('title', '');
@@ -2617,7 +2611,7 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
                         <Label htmlFor="ticket-title">Tiêu đề</Label>
                         <Select
                           value={ticketData.title}
-                          onValueChange={(value) => updateTicketData('title', value)}
+                          onValueChange={(value: string) => updateTicketData('title', value)}
                           disabled={!ticketData.classification}
                         >
                           <SelectTrigger className="w-full">
@@ -2693,7 +2687,7 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
                           <Label htmlFor="ticket-priority">Độ ưu tiên</Label>
                           <Select
                             value={ticketData.priority}
-                            onValueChange={(value) => updateTicketData('priority', value)}
+                            onValueChange={(value: string) => updateTicketData('priority', value)}
                           >
                             <SelectTrigger className="w-full">
                               <SelectValue placeholder="Chọn độ ưu tiên" />
@@ -2711,7 +2705,7 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
                           <Label htmlFor="ticket-status">Trạng thái xử lý</Label>
                           <Select
                             value={ticketData.status}
-                            onValueChange={(value) => updateTicketData('status', value)}
+                            onValueChange={(value: string) => updateTicketData('status', value)}
                           >
                             <SelectTrigger className="w-full">
                               <SelectValue placeholder="Chọn trạng thái" />
@@ -2731,7 +2725,7 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
                           <Label htmlFor="ticket-department">Phòng ban</Label>
                           <Select
                             value={ticketData.department}
-                            onValueChange={(value) => updateTicketData('department', value)}
+                            onValueChange={(value: string) => updateTicketData('department', value)}
                           >
                             <SelectTrigger className="w-full">
                               <SelectValue placeholder="Chọn phòng ban" />
@@ -2770,7 +2764,7 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
                             <Label htmlFor="ticket-agent">Chọn Agent</Label>
                             <Select
                               value={ticketData.assignedAgent}
-                              onValueChange={(value) => {
+                              onValueChange={(value: string) => {
                                 updateTicketData('assignedAgent', value);
                                 // Clear team selection when agent is selected
                                 if (value) updateTicketData('assignedTeam', '');
@@ -2813,7 +2807,7 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
                             <Label htmlFor="ticket-team">Hoặc chọn Team</Label>
                             <Select
                               value={ticketData.assignedTeam}
-                              onValueChange={(value) => {
+                              onValueChange={(value: string) => {
                                 updateTicketData('assignedTeam', value);
                                 // Clear agent selection when team is selected
                                 if (value) updateTicketData('assignedAgent', '');

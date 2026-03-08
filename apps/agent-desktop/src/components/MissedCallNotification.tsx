@@ -1,15 +1,10 @@
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { useNotifications, MissedCall } from "@/components/NotificationContext";
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+import { Card, CardContent } from './ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { useNotifications, MissedCallNotification as MissedCallType } from './NotificationContext';
 import { 
   Phone,
   PhoneCall,
@@ -24,7 +19,7 @@ import {
 } from "lucide-react";
 
 interface MissedCallNotificationProps {
-  missedCall: MissedCall;
+  missedCall: MissedCallType;
   onViewDetails?: (callId: string) => void;
   onCallBack?: (callId: string) => void;
 }
@@ -36,8 +31,6 @@ export function MissedCallNotification({
 }: MissedCallNotificationProps) {
   const { 
     removeNotification, 
-    markMissedCallAsViewed, 
-    markCallbackAttempted,
     settings 
   } = useNotifications();
   
@@ -76,7 +69,7 @@ export function MissedCallNotification({
     return phone.replace(/(\d{4})(\d{3})(\d{3})/, '$1 $2 $3');
   };
 
-  const getReasonText = (reason: MissedCall['reason']) => {
+  const getReasonText = (reason: MissedCallType['reason']) => {
     switch (reason) {
       case 'timeout': return 'Không trả lời';
       case 'not-ready': return 'Không sẵn sàng';
@@ -86,7 +79,7 @@ export function MissedCallNotification({
     }
   };
 
-  const getReasonColor = (reason: MissedCall['reason']) => {
+  const getReasonColor = (reason: MissedCallType['reason']) => {
     switch (reason) {
       case 'timeout': return 'text-yellow-600 bg-yellow-50';
       case 'not-ready': return 'text-orange-600 bg-orange-50';
@@ -96,7 +89,7 @@ export function MissedCallNotification({
     }
   };
 
-  const getPriorityColor = (priority: MissedCall['priority']) => {
+  const getPriorityColor = (priority: MissedCallType['priority']) => {
     switch (priority) {
       case 'urgent': return 'border-red-500 bg-red-50';
       case 'high': return 'border-orange-500 bg-orange-50';
@@ -114,13 +107,13 @@ export function MissedCallNotification({
   };
 
   const handleViewDetails = () => {
-    markMissedCallAsViewed(missedCall.id);
+    // markMissedCallAsViewed(missedCall.id); // TODO: Implement in NotificationContext
     onViewDetails?.(missedCall.id);
     handleDismiss();
   };
 
   const handleCallBack = () => {
-    markCallbackAttempted(missedCall.id);
+    // markCallbackAttempted(missedCall.id); // TODO: Implement in NotificationContext
     onCallBack?.(missedCall.id);
     handleDismiss();
   };

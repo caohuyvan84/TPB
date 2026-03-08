@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Button } from './ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Badge } from './ui/badge';
 import { 
   Play, 
   Pause, 
@@ -30,7 +30,7 @@ export function CallRecordingPlayer({
   callDuration = '03:05',
   quality = 'high',
   className = '' 
-}: CallRecordingPlayerProps) {
+}: CallRecordingPlayerProps): React.ReactElement {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolume] = useState(75);
@@ -101,7 +101,7 @@ export function CallRecordingPlayer({
 
   // Simulate audio progress (for demo)
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>; // Fix: use ReturnType instead of NodeJS.Timeout
     if (isPlaying) {
       interval = setInterval(() => {
         setCurrentTime(prev => {

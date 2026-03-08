@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { Button } from './ui/button';
+import { Card, CardContent } from './ui/card';
+import { Badge } from './ui/badge';
+import { Separator } from './ui/separator';
 import { 
   Phone, 
   PhoneOff, 
@@ -27,7 +27,7 @@ interface CallData {
   customerName: string;
   customerPhone: string;
   startTime: Date;
-  status: 'ringing' | 'connected' | 'on-hold' | 'transferring';
+  status: 'ringing' | 'connected' | 'on-hold' | 'transferring' | 'ended'; // Fix: add 'ended' status
   source: string;
   avatar?: string;
 }
@@ -162,7 +162,7 @@ export function FloatingCallWidget({
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={(e) => {
+                onClick={(e: React.MouseEvent) => {
                   e.stopPropagation();
                   onHangup();
                 }}
@@ -247,7 +247,7 @@ export function FloatingCallWidget({
                 <Button 
                   variant="outline" 
                   size="sm"
-                  onClick={(e) => {
+                  onClick={(e: React.MouseEvent) => {
                     e.stopPropagation();
                     onTransfer();
                   }}
@@ -260,7 +260,7 @@ export function FloatingCallWidget({
                 <Button 
                   variant="outline" 
                   size="sm"
-                  onClick={(e) => {
+                  onClick={(e: React.MouseEvent) => {
                     e.stopPropagation();
                     onSurvey();
                   }}
@@ -275,7 +275,7 @@ export function FloatingCallWidget({
                 <Button 
                   variant="outline" 
                   size="sm"
-                  onClick={(e) => {
+                  onClick={(e: React.MouseEvent) => {
                     e.stopPropagation();
                     // Add conference functionality
                   }}
@@ -288,7 +288,7 @@ export function FloatingCallWidget({
                 <Button 
                   variant="outline" 
                   size="sm"
-                  onClick={(e) => {
+                  onClick={(e: React.MouseEvent) => {
                     e.stopPropagation();
                     onMaximize();
                   }}
@@ -306,7 +306,7 @@ export function FloatingCallWidget({
               <Button 
                 variant="destructive" 
                 size="sm"
-                onClick={(e) => {
+                onClick={(e: React.MouseEvent) => {
                   e.stopPropagation();
                   onHangup();
                 }}
@@ -319,7 +319,7 @@ export function FloatingCallWidget({
               <Button 
                 variant="ghost" 
                 size="sm"
-                onClick={(e) => {
+                onClick={(e: React.MouseEvent) => {
                   e.stopPropagation();
                   onHide();
                 }}

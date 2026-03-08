@@ -1,26 +1,15 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Separator } from './ui/separator';
+import { Label } from './ui/label';
+import { Input } from './ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { ScrollArea } from './ui/scroll-area';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { Textarea } from './ui/textarea';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { 
   Ticket,
   Clock,
@@ -407,7 +396,7 @@ export function TicketDetail({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label className="text-xs text-muted-foreground">Độ ưu tiên</Label>
-                      <Select value={editablePriority} onValueChange={setEditablePriority}>
+                      <Select value={editablePriority} onValueChange={(value) => setEditablePriority(value as 'low' | 'medium' | 'high' | 'urgent')}>
                         <SelectTrigger className="h-8 text-xs mt-1">
                           <SelectValue />
                         </SelectTrigger>
@@ -421,7 +410,7 @@ export function TicketDetail({
                     </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">Trạng thái xử lý</Label>
-                      <Select value={editableStatus} onValueChange={setEditableStatus}>
+                      <Select value={editableStatus} onValueChange={(value) => setEditableStatus(value as 'new' | 'in-progress' | 'resolved' | 'pending' | 'closed')}>
                         <SelectTrigger className="h-8 text-xs mt-1">
                           <SelectValue />
                         </SelectTrigger>

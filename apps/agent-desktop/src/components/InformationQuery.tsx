@@ -1,32 +1,14 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Separator } from './ui/separator';
+import { ScrollArea } from './ui/scroll-area';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import {
   Shield,
   User,
@@ -58,8 +40,8 @@ import {
   MoreVertical,
   FileEdit,
 } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
-import { LoanDetailWithTabs } from "@/components/LoanDetailWithTabs";
+import { Skeleton } from './ui/skeleton';
+import { LoanDetailWithTabs } from './LoanDetailWithTabs';
 
 // Types
 type ProductCategory = 
@@ -85,7 +67,7 @@ interface Product {
   id: string;
   productCode: string;
   productName: string;
-  status: "active" | "locked" | "closed";
+  status: "active" | "locked" | "closed" | "overdue";
   [key: string]: any;
 }
 
@@ -384,7 +366,7 @@ export function InformationQuery({ customerInfo: customerInfoProp, onBack, onCre
     }).format(amount);
   };
 
-  const maskData = (data: string, visibleChars: number = 4) => {
+  const maskData = (data: string, visibleChars = 4) => {
     if (!data) return "N/A";
     if (showSensitiveData) return data;
     if (data.length <= visibleChars) return data;
@@ -582,7 +564,7 @@ export function InformationQuery({ customerInfo: customerInfoProp, onBack, onCre
   };
 
   const renderProductSummary = (category: ProductCategory, product: Product) => {
-    const summaries: Record<ProductCategory, JSX.Element> = {
+    const summaries: Record<ProductCategory, React.ReactElement> = {
       accounts: (
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
           <div className="text-muted-foreground">Số dư:</div>
@@ -673,7 +655,7 @@ export function InformationQuery({ customerInfo: customerInfoProp, onBack, onCre
 
   const renderProductDetail = (category: ProductCategory, product: Product) => {
     // Common detail structure with grouped sections
-    const details: Record<ProductCategory, JSX.Element> = {
+    const details: Record<ProductCategory, React.ReactElement> = {
       accounts: (
         <div className="space-y-6">
           <div>

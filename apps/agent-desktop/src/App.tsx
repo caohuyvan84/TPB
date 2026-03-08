@@ -1,19 +1,19 @@
 import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Toaster } from '@/components/ui/sonner';
+import { Button } from './components/ui/button';
+import { Toaster } from './components/ui/sonner';
 // Agent Desktop Application with multi-channel support
-import { EnhancedAgentHeader } from '@/components/EnhancedAgentHeader';
-import { InteractionList } from '@/components/InteractionList';
-import { InteractionDetail } from '@/components/InteractionDetail';
-import { CustomerInfo } from '@/components/CustomerInfoScrollFixed';
-import { TicketDetail } from '@/components/TicketDetail';
-import { TransferCallDialog } from '@/components/TransferCallDialog';
-import { FloatingCallWidget } from '@/components/FloatingCallWidget';
-import { AgentStatusWidget } from '@/components/AgentStatusWidget';
-import { CallProvider, useCall } from '@/components/CallContext';
-import { EnhancedAgentStatusProvider, useEnhancedAgentStatus } from '@/components/EnhancedAgentStatusContext';
-import { NotificationProvider, useNotifications } from '@/components/NotificationContext';
-import { ChannelFilter } from '@/components/useInteractionStats';
+import { EnhancedAgentHeader } from './components/EnhancedAgentHeader';
+import { InteractionList } from './components/InteractionList';
+import { InteractionDetail } from './components/InteractionDetail';
+import { CustomerInfo } from './components/CustomerInfoScrollFixed';
+import { TicketDetail } from './components/TicketDetail';
+import { TransferCallDialog } from './components/TransferCallDialog';
+import { FloatingCallWidget } from './components/FloatingCallWidget';
+import { AgentStatusWidget } from './components/AgentStatusWidget';
+import { CallProvider, useCall } from './components/CallContext';
+import { EnhancedAgentStatusProvider, useEnhancedAgentStatus } from './components/EnhancedAgentStatusContext';
+import { NotificationProvider, useNotifications } from './components/NotificationContext';
+import { ChannelFilter, Interaction } from './components/useInteractionStats';
 import { 
   ChevronLeft, 
   ChevronRight,
@@ -33,7 +33,7 @@ import {
   X,
   Plus
 } from 'lucide-react';
-import { EmailReplyDialog } from '@/components/EmailReplyDialog';
+import { EmailReplyDialog } from './components/EmailReplyDialog';
 
 // Mock ticket data
 const mockTickets = {
@@ -640,6 +640,7 @@ const sampleNotifications = {
     dueDate: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 hours from now
     classification: 'bug',
     classificationLabel: 'Báo lỗi',
+    category: 'Báo lỗi', // Fix: add required category property
     priority: 'high' as const
   },
   ticketDue: {
@@ -651,6 +652,7 @@ const sampleNotifications = {
     timeUntilDue: 30,
     classification: 'bug',
     classificationLabel: 'Báo lỗi',
+    category: 'Báo lỗi', // Fix: add required category property
     priority: 'urgent' as const
   },
   systemAlert: {
@@ -803,12 +805,14 @@ function AppContent() {
       prev.map(item => 
         item.id === interaction.id 
           ? { 
-              ...item, 
+              ...item,
+              direction: 'outbound',
               calledBack: true, 
               calledBackTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
               status: 'completed', // Move to closed tab
-              assignedAgent: agentState.agentName // Assign to current agent
-            }
+              assignedAgent: agentState.agentName, // Assign to current agent
+              agent: agentState.agentName // Fix: ensure agent property is set
+            } as any
           : item
       )
     );
@@ -816,11 +820,12 @@ function AppContent() {
     // Start a call with the customer
     const callData = {
       type: 'outbound' as const,
-      status: 'connecting' as const,
+      status: 'ringing' as const, // Fix: use 'ringing' instead of 'connecting'
       customerName: interaction.customerName || 'Khách hàng',
       customerPhone: interaction.customerPhone || '',
       startTime: new Date().toISOString(),
       direction: 'outbound' as const,
+      source: 'callback' // Fix: add required source property
     };
     
     startCall(callData);
@@ -1022,7 +1027,7 @@ function AppContent() {
   return (
     <div className="h-screen flex flex-col bg-muted">
       <EnhancedAgentHeader 
-        interactions={interactions}
+        interactions={interactions as Interaction[]}
         onChannelFilter={handleChannelFilter}
         activeChannelFilter={channelFilter}
         onViewCallDetails={handleViewCallDetails}

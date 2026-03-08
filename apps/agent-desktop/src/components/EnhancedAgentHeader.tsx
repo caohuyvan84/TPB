@@ -1,23 +1,16 @@
 import { useState } from "react";
-import { cn } from "@/components/ui/utils";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel
-} from "@/components/ui/dropdown-menu";
-import { useCall } from "@/components/CallContext";
-import { useEnhancedAgentStatus } from "@/components/EnhancedAgentStatusContext";
-import { useNotifications } from "@/components/NotificationContext";
-import { AgentStatusWidget } from "@/components/AgentStatusWidget";
-import { AgentSettingsSidebar } from "@/components/AgentSettingsSidebar";
-import { NotificationCenter } from "@/components/NotificationCenter";
-import { useInteractionStats, ChannelFilter, Interaction } from "@/components/useInteractionStats";
+import { cn } from './ui/utils';
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from './ui/dropdown-menu';
+import { useCall } from './CallContext';
+import { useEnhancedAgentStatus } from './EnhancedAgentStatusContext';
+import { useNotifications } from './NotificationContext';
+import { AgentStatusWidget } from './AgentStatusWidget';
+import { AgentSettingsSidebar } from './AgentSettingsSidebar';
+import { NotificationCenter } from './NotificationCenter';
+import { useInteractionStats, ChannelFilter, Interaction } from './useInteractionStats';
 import { 
   Bell, 
   Settings, 

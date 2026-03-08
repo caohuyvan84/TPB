@@ -1,8 +1,8 @@
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ChatSLABadge, WaitingTimeBadge } from "@/components/ChatSLABadge";
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { Card, CardContent } from './ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { ChatSLABadge, WaitingTimeBadge } from './ChatSLABadge';
 import { 
   Phone, 
   Mail, 
@@ -143,7 +143,7 @@ export function InteractionListItem({
   };
 
   // Truncate subject for display
-  const truncateText = (text: string, maxLength: number = 50) => {
+  const truncateText = (text: string, maxLength = 50) => {
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + '...';
   };
@@ -220,7 +220,7 @@ export function InteractionListItem({
                   {interaction.customerName || interaction.customerPhone || 'Số ẩn'}
                 </p>
                 {interaction.isVIP && (
-                  <Crown className="h-3 w-3 text-yellow-600 flex-shrink-0" title="Khách hàng VIP" />
+                  <Crown className="h-3 w-3 text-yellow-600 flex-shrink-0" aria-label="Khách hàng VIP" />
                 )}
               </div>
               <p className="text-xs text-muted-foreground truncate">

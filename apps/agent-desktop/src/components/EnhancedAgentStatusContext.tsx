@@ -96,7 +96,7 @@ export function EnhancedAgentStatusProvider({
   agentName = 'Agent Tung'
 }: EnhancedAgentStatusProviderProps) {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connected');
-  const timersRef = useRef<{ [key in ChannelType]: NodeJS.Timeout | null }>({
+  const timersRef = useRef<{ [key in ChannelType]: ReturnType<typeof setInterval> | null }>({ // Fix: use ReturnType instead of NodeJS.Timeout
     voice: null,
     email: null,
     chat: null

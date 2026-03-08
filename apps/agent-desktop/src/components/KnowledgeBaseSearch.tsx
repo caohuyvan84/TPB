@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { toast } from "sonner@2.0.3";
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Badge } from './ui/badge';
+import { Separator } from './ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Label } from './ui/label';
+import { Checkbox } from './ui/checkbox';
+import { toast } from "sonner";
 import { 
   Search,
   BookOpen,
@@ -312,9 +312,11 @@ function getAllArticles(folder: KnowledgeFolder): KnowledgeArticle[] {
   const articles: KnowledgeArticle[] = [];
   
   folder.children.forEach(child => {
-    if (child.type === 'article') {
+    if ('content' in child) {
+      // It's an article
       articles.push(child as KnowledgeArticle);
     } else {
+      // It's a folder
       articles.push(...getAllArticles(child as KnowledgeFolder));
     }
   });
@@ -382,7 +384,7 @@ export function KnowledgeBaseSearch({ onInsertContent, onContentInsert }: Knowle
   };
 
   // Copy to clipboard
-  const handleCopyToClipboard = async (content: string, label: string = "Nội dung") => {
+  const handleCopyToClipboard = async (content: string, label = "Nội dung") => {
     try {
       await navigator.clipboard.writeText(content);
       toast.success(`${label} đã được sao chép vào clipboard`);
@@ -477,11 +479,11 @@ export function KnowledgeBaseSearch({ onInsertContent, onContentInsert }: Knowle
         ) : (
           <div
             className="flex items-center space-x-2 p-2 hover:bg-blue-50 cursor-pointer rounded"
-            onClick={() => setSelectedArticle(folder as KnowledgeArticle)}
+            onClick={() => setSelectedArticle(folder as unknown as KnowledgeArticle)}
           >
             <BookOpen className="h-4 w-4 text-green-600" />
-            <span className="text-sm">{(folder as KnowledgeArticle).title}</span>
-            {isArticleBookmarked((folder as KnowledgeArticle).id) && (
+            <span className="text-sm">{(folder as unknown as KnowledgeArticle).title}</span>
+            {isArticleBookmarked((folder as unknown as KnowledgeArticle).id) && (
               <Star className="h-3 w-3 text-yellow-500 fill-current" />
             )}
           </div>
@@ -546,7 +548,7 @@ export function KnowledgeBaseSearch({ onInsertContent, onContentInsert }: Knowle
   };
 
   // Insert content handler
-  const handleInsertContent = (content: string, label: string = "Nội dung") => {
+  const handleInsertContent = (content: string, label = "Nội dung") => {
     const insertFn = onInsertContent || onContentInsert;
     if (insertFn) {
       insertFn(content);

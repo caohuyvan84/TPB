@@ -1,21 +1,9 @@
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Avatar } from "@/components/ui/avatar";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { ChatSLABadge, WaitingTimeBadge, SLAStatus } from "@/components/ChatSLABadge";
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+import { Avatar } from './ui/avatar';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
+import { ChatSLABadge, WaitingTimeBadge, SLAStatus } from './ChatSLABadge';
 import {
   User,
   MessageCircle,
@@ -26,9 +14,9 @@ import {
   CheckCircle2,
   Info,
 } from "lucide-react";
-import { cn } from "@/components/ui/utils";
+import { cn } from './ui/utils';
 import { useState } from "react";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner"; // Fix: remove version from import path
 
 interface ChatSessionHeaderProps {
   customerName: string;

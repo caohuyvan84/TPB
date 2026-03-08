@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Badge } from './ui/badge';
 import { AIAssistantChatProps, ChatMessage } from './ai-assistant/types';
 import { initialMessages } from './ai-assistant/constants';
 import { generateAIResponse, getContextualSuggestions } from './ai-assistant/utils';
@@ -69,12 +69,13 @@ export function AIAssistantChat({ interaction, onKnowledgeSearch, onInsertConten
           onKnowledgeSearch(action.data);
         }
         break;
-      case 'email':
+      case 'email': {
         const lastAIMessage = messages.filter(m => m.type === 'ai').pop();
         if (lastAIMessage && onInsertContent) {
           onInsertContent(lastAIMessage.content);
         }
         break;
+      }
       case 'search':
         if (onKnowledgeSearch) {
           onKnowledgeSearch(action.data);

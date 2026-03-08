@@ -1,13 +1,8 @@
 import { useEffect, useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Badge } from './ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Clock, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
-import { cn } from "@/components/ui/utils";
+import { cn } from './ui/utils';
 
 export type SLAStatus =
   | "not-responded"
@@ -188,7 +183,7 @@ export function WaitingTimeBadge({
       <Tooltip>
         <TooltipTrigger asChild>
           <Badge
-            variant={isCritical ? "destructive" : isWarning ? "warning" : "secondary"}
+            variant={isCritical ? "destructive" : "secondary"}
             className={cn(
               "flex items-center gap-1.5",
               isCritical

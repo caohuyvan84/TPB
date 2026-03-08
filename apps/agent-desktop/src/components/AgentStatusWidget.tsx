@@ -1,31 +1,16 @@
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { useEnhancedAgentStatus, ChannelType, NotReadyReason } from "@/components/EnhancedAgentStatusContext";
-import { AgentSettingsSidebar } from "@/components/AgentSettingsSidebar";
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+import { Card, CardContent } from './ui/card';
+import { Separator } from './ui/separator';
+import { Textarea } from './ui/textarea';
+import { Label } from './ui/label';
+import { Switch } from './ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { useEnhancedAgentStatus, ChannelType, NotReadyReason } from './EnhancedAgentStatusContext';
+import { AgentSettingsSidebar } from './AgentSettingsSidebar';
 import { 
   Power,
   CheckCircle,
@@ -509,7 +494,7 @@ export function AgentStatusWidget({
                           <div className="flex items-center">
                             <Switch
                               checked={isReady}
-                              onCheckedChange={(checked) => handleChannelToggle(channel, checked)}
+                              onCheckedChange={(checked: boolean) => handleChannelToggle(channel, checked)}
                               disabled={connectionStatus === 'disconnected'}
                               className="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-gray-300"
                             />

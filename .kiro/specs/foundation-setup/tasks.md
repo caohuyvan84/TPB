@@ -8,7 +8,7 @@ This is a 2-week sprint focused on infrastructure, tooling, and project structur
 
 ## Tasks
 
-- [-] 1. Git Repository and Nx Monorepo Initialization
+- [x] 1. Git Repository and Nx Monorepo Initialization
   - [x] 1.1 Initialize Git repository and create .gitignore
     - Run `git init` at project root
     - Create .gitignore excluding node_modules, .env, build, dist directories
@@ -175,7 +175,7 @@ This is a 2-week sprint focused on infrastructure, tooling, and project structur
     - Create initial DTO schemas
     - _Requirements: 1.7_
 
-  - [-] 1.7 Verify monorepo build
+  - [x] 1.7 Verify monorepo build
     - Run `nx build agent-desktop`
     - Verify build completes successfully
     - Test that UI renders correctly

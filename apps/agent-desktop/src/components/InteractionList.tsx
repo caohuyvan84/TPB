@@ -1,22 +1,17 @@
 import { useState, useMemo } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { InteractionListItem } from "@/components/InteractionListItem";
-import { useInteractionStats, ChannelFilter, StatusFilter, PriorityFilter, InteractionFilters } from "@/components/useInteractionStats";
-import { AdvancedFilters, ChatFilters as ChatFilterType, CallFilters as CallFilterType, EmailFilters as EmailFilterType } from "@/components/AdvancedFilters";
-import { DateRangeFilter, DateRangeValue } from "@/components/DateRangeFilter";
-import { useCall } from "@/components/CallContext";
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Badge } from './ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Separator } from './ui/separator';
+import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { InteractionListItem } from './InteractionListItem';
+import { useInteractionStats, ChannelFilter, StatusFilter, PriorityFilter, InteractionFilters } from './useInteractionStats';
+import { AdvancedFilters, ChatFilters, CallFilters, EmailFilters } from './AdvancedFilters';
+import { ChatSLAFilterType } from './ChatAdvancedFilters';
+import { DateRangeFilter, DateRangeValue } from './DateRangeFilter';
+import { useCall } from './CallContext';
 import {
   Search,
   Filter,
@@ -32,7 +27,7 @@ import {
   CheckCircle2,
   Inbox
 } from "lucide-react";
-import { cn } from "@/components/ui/utils";
+import { cn } from './ui/utils';
 
 // Define assignment status types
 type AssignmentStatus = 'queue' | 'assigned' | 'closed';
@@ -65,7 +60,7 @@ export function InteractionList({
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   // Chat-specific filters
-  const [chatFilters, setChatFilters] = useState<ChatFilterType>({
+  const [chatFilters, setChatFilters] = useState<ChatFilters>({
     slaStatus: [],
     sessionStatus: 'all',
     channels: [],
@@ -74,7 +69,7 @@ export function InteractionList({
   });
 
   // Call-specific filters
-  const [callFilters, setCallFilters] = useState<CallFilterType>({
+  const [callFilters, setCallFilters] = useState<CallFilters>({
     callStatus: 'all',
     direction: 'all',
     sortBy: 'none',
@@ -82,7 +77,7 @@ export function InteractionList({
   });
 
   // Email-specific filters
-  const [emailFilters, setEmailFilters] = useState<EmailFilterType>({
+  const [emailFilters, setEmailFilters] = useState<EmailFilters>({
     emailStatus: 'all',
     priority: 'all',
     sortBy: 'none',
@@ -127,7 +122,7 @@ export function InteractionList({
         const { from, to } = chatFilters.dateRange;
         if (from || to) {
           result = result.filter((interaction) => {
-            const interactionDate = new Date(interaction.timestamp);
+            const interactionDate = new Date(interaction.timestamp || '');
             if (from && interactionDate < from) return false;
             if (to && interactionDate > to) return false;
             return true;
@@ -147,7 +142,7 @@ export function InteractionList({
           }
           
           // Check for other SLA statuses
-          return chatFilters.slaStatus.includes(slaStatus);
+          return slaStatus ? chatFilters.slaStatus.includes(slaStatus as ChatSLAFilterType) : false;
         });
       }
 
@@ -165,7 +160,7 @@ export function InteractionList({
           const source = interaction.source?.toLowerCase() || '';
           
           // Check if source matches any of the selected channels
-          return chatFilters.channels.some((channel) => {
+          return chatFilters.channels.some((channel: string) => {
             if (channel === 'facebook') {
               return source.includes('facebook');
             } else if (channel === 'zalo') {
@@ -181,37 +176,37 @@ export function InteractionList({
       // Sort chat interactions
       result = [...result].sort((a, b) => {
         switch (chatFilters.sortBy) {
-          case 'sla-nearest-asc':
+          case 'sla-nearest-asc': {
             // Sort by remaining SLA time (ascending - nearest deadline first)
             const aRemainingAsc = a.chatSLA?.slaRemainingSeconds ?? Infinity;
             const bRemainingAsc = b.chatSLA?.slaRemainingSeconds ?? Infinity;
             return aRemainingAsc - bRemainingAsc;
-
-          case 'sla-nearest-desc':
+          }
+          case 'sla-nearest-desc': {
             // Sort by remaining SLA time (descending - furthest deadline first)
             const aRemainingDesc = a.chatSLA?.slaRemainingSeconds ?? -Infinity;
             const bRemainingDesc = b.chatSLA?.slaRemainingSeconds ?? -Infinity;
             return bRemainingDesc - aRemainingDesc;
-
-          case 'waiting-longest-desc':
+          }
+          case 'waiting-longest-desc': {
             // Sort by waiting time (descending - longest wait first)
             const aWaitingDesc = a.chatSLA?.waitingSeconds ?? 0;
             const bWaitingDesc = b.chatSLA?.waitingSeconds ?? 0;
             return bWaitingDesc - aWaitingDesc;
-
-          case 'waiting-longest-asc':
+          }
+          case 'waiting-longest-asc': {
             // Sort by waiting time (ascending - shortest wait first)
             const aWaitingAsc = a.chatSLA?.waitingSeconds ?? 0;
             const bWaitingAsc = b.chatSLA?.waitingSeconds ?? 0;
             return aWaitingAsc - bWaitingAsc;
-
+          }
           case 'start-time-desc':
             // Newest first
-            return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+            return new Date(b.timestamp || '').getTime() - new Date(a.timestamp || '').getTime();
 
           case 'start-time-asc':
             // Oldest first
-            return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+            return new Date(a.timestamp || '').getTime() - new Date(b.timestamp || '').getTime();
 
           case 'channel-asc':
             // A-Z
@@ -252,7 +247,7 @@ export function InteractionList({
         const { from, to } = callFilters.dateRange;
         if (from || to) {
           result = result.filter((interaction) => {
-            const interactionDate = new Date(interaction.timestamp);
+            const interactionDate = new Date(interaction.timestamp || '');
             if (from && interactionDate < from) return false;
             if (to && interactionDate > to) return false;
             return true;
@@ -265,11 +260,11 @@ export function InteractionList({
         switch (callFilters.sortBy) {
           case 'start-time-desc':
             // Newest first
-            return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+            return new Date(b.timestamp || '').getTime() - new Date(a.timestamp || '').getTime();
 
           case 'start-time-asc':
             // Oldest first
-            return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+            return new Date(a.timestamp || '').getTime() - new Date(b.timestamp || '').getTime();
 
           case 'none':
           default:
@@ -302,6 +297,7 @@ export function InteractionList({
         const { from, to } = emailFilters.dateRange;
         if (from || to) {
           result = result.filter((interaction) => {
+            if (!interaction.timestamp) return false;
             const interactionDate = new Date(interaction.timestamp);
             if (from && interactionDate < from) return false;
             if (to && interactionDate > to) return false;
@@ -315,10 +311,12 @@ export function InteractionList({
         switch (emailFilters.sortBy) {
           case 'start-time-desc':
             // Newest first
+            if (!a.timestamp || !b.timestamp) return 0;
             return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
 
           case 'start-time-asc':
             // Oldest first
+            if (!a.timestamp || !b.timestamp) return 0;
             return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
 
           case 'none':
@@ -797,7 +795,7 @@ export function InteractionList({
                   ⚙️ Lọc & Sắp xếp chi tiết
                 </label>
                 <AdvancedFilters
-                  channel={channelFilter === 'all' ? 'chat' : channelFilter}
+                  channel={channelFilter === 'all' || channelFilter === 'missed' ? 'chat' : channelFilter}
                   chatFilters={chatFilters}
                   callFilters={callFilters}
                   emailFilters={emailFilters}

@@ -1,23 +1,17 @@
 import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Card, CardContent } from './ui/card';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { CheckCircle, Search, FileText, Send } from "lucide-react";
+import type { ReactElement } from "react";
 
 interface LoanDetailWithTabsProps {
   product: any;
   formatCurrency: (amount: number) => string;
-  getStatusBadge: (status: string) => JSX.Element;
+  getStatusBadge: (status: string) => ReactElement;
 }
 
 export function LoanDetailWithTabs({
@@ -209,7 +203,7 @@ export function LoanDetailWithTabs({
           </div>
         );
 
-      case "actions":
+      case "actions": {
         const remainingLimit = product.loanAmount - product.currentBalance;
         const maxDisbursement = remainingLimit > 0 ? remainingLimit : 0;
         const isValidAmount = disbursementAmount && 
@@ -283,7 +277,7 @@ export function LoanDetailWithTabs({
             </Card>
           </div>
         );
-
+      }
       default:
         return null;
     }

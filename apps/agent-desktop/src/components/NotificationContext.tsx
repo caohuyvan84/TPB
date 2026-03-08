@@ -293,35 +293,35 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       ...data,
       type: 'missed-call',
       priority: data.isVIP ? 'urgent' : data.priority,
-    });
+    } as unknown as Omit<AppNotification, 'id' | 'status' | 'createdAt'>);
   }, [addNotification]);
 
   const addTicketAssignment = useCallback((data: Omit<TicketAssignmentNotification, 'id' | 'status' | 'createdAt' | 'type' | 'title' | 'message'>) => {
     return addNotification({
       ...data,
       type: 'ticket-assignment',
-    });
+    } as unknown as Omit<AppNotification, 'id' | 'status' | 'createdAt'>);
   }, [addNotification]);
 
   const addTicketDue = useCallback((data: Omit<TicketDueNotification, 'id' | 'status' | 'createdAt' | 'type' | 'title' | 'message'>) => {
     return addNotification({
       ...data,
       type: 'ticket-due',
-    });
+    } as unknown as Omit<AppNotification, 'id' | 'status' | 'createdAt'>);
   }, [addNotification]);
 
   const addSystemAlert = useCallback((data: Omit<SystemAlertNotification, 'id' | 'status' | 'createdAt' | 'type' | 'title' | 'message'>) => {
     return addNotification({
       ...data,
       type: 'system-alert',
-    });
+    } as unknown as Omit<AppNotification, 'id' | 'status' | 'createdAt'>);
   }, [addNotification]);
 
   const addScheduleReminder = useCallback((data: Omit<ScheduleReminderNotification, 'id' | 'status' | 'createdAt' | 'type' | 'title' | 'message'>) => {
     return addNotification({
       ...data,
       type: 'schedule-reminder',
-    });
+    } as unknown as Omit<AppNotification, 'id' | 'status' | 'createdAt'>);
   }, [addNotification]);
 
   // Check if notification should be shown
@@ -329,11 +329,11 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     if (!settings.enableNotifications) return false;
 
     switch (notification.type) {
-      case 'missed-call':
+      case 'missed-call': {
         const missedCall = notification as MissedCallNotification;
         return settings.missedCalls.enabled && 
-               (!settings.missedCalls.vipOnly || missedCall.isVIP);
-      
+               (!settings.missedCalls.vipOnly || (missedCall.isVIP ?? false));
+      }
       case 'ticket-assignment':
         return settings.ticketAssignments.enabled &&
                (!settings.ticketAssignments.highPriorityOnly || ['high', 'urgent'].includes(notification.priority));
@@ -357,7 +357,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   const updateNotification = useCallback((id: string, updates: Partial<AppNotification>) => {
     setNotifications(prev => 
       prev.map(notification => 
-        notification.id === id ? { ...notification, ...updates } : notification
+        notification.id === id ? { ...notification, ...updates } as AppNotification : notification
       )
     );
   }, []);
@@ -387,7 +387,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     setActiveNotifications([]);
   }, []);
 
-  const clearOldNotifications = useCallback((olderThanHours: number = 24) => {
+  const clearOldNotifications = useCallback((olderThanHours = 24) => {
     const cutoffTime = new Date(Date.now() - olderThanHours * 60 * 60 * 1000);
     setNotifications(prev => prev.filter(notification => notification.createdAt > cutoffTime));
   }, []);

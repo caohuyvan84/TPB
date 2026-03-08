@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { useEnhancedAgentStatus as useAgentStatus, ChannelType } from "@/components/EnhancedAgentStatusContext";
+import { Button } from './ui/button';
+import { Card, CardContent } from './ui/card';
+import { Badge } from './ui/badge';
+import { Switch } from './ui/switch';
+import { Label } from './ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { ScrollArea } from './ui/scroll-area';
+import { Separator } from './ui/separator';
+import { useEnhancedAgentStatus, ChannelType } from './EnhancedAgentStatusContext';
 import { 
   Phone, 
   Mail, 
@@ -30,7 +30,7 @@ interface AgentSettingsSidebarProps {
 
 export function AgentSettingsSidebar({ isOpen, onClose }: AgentSettingsSidebarProps) {
   const [activeTab, setActiveTab] = useState("status");
-  const { getChannelStatus, setChannelStatus, isChannelReady } = useAgentStatus();
+  const { getChannelStatus, setChannelStatus, isChannelReady } = useEnhancedAgentStatus();
 
   if (!isOpen) return null;
 

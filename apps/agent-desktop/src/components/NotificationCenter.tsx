@@ -1,41 +1,16 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Switch } from "@/components/ui/switch";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { 
-  useNotifications, 
-  AppNotification, 
-  MissedCallNotification,
-  TicketAssignmentNotification,
-  TicketDueNotification,
-  SystemAlertNotification,
-  ScheduleReminderNotification
-} from "@/components/NotificationContext";
-import { MissedCallNotification as MissedCallToast } from "@/components/MissedCallNotification";
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+import { Card, CardContent } from './ui/card';
+import { Separator } from './ui/separator';
+import { ScrollArea } from './ui/scroll-area';
+import { Switch } from './ui/switch';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from './ui/sheet';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { useNotifications, AppNotification, MissedCallNotification as MissedCallNotificationType, TicketAssignmentNotification, TicketDueNotification, SystemAlertNotification, ScheduleReminderNotification } from './NotificationContext';
+import { MissedCallNotification as MissedCallNotificationComponent } from './MissedCallNotification';
 import { 
   Bell,
   BellOff,
@@ -292,7 +267,7 @@ export function NotificationCenter({
                   <span className={`font-medium ${typeColor.replace('text-', 'text-').replace('-600', '-800')}`}>
                     {typeLabel}
                   </span>
-                  {notification.type === 'missed-call' && (notification as MissedCallNotification).isVIP && (
+                  {notification.type === 'missed-call' && (notification as MissedCallNotificationType).isVIP && (
                     <Tooltip>
                       <TooltipTrigger>
                         <Crown className="h-4 w-4 text-yellow-600" />
@@ -329,7 +304,7 @@ export function NotificationCenter({
             {notification.type === 'missed-call' ? (
               <div className="flex items-center space-x-3">
                 <Avatar className="h-10 w-10">
-                  <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${(notification as MissedCallNotification).customerPhone}`} />
+                  <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${(notification as MissedCallNotificationType).customerPhone}`} />
                   <AvatarFallback>
                     <User className="h-4 w-4" />
                   </AvatarFallback>
@@ -338,29 +313,29 @@ export function NotificationCenter({
                 <div className="flex-1">
                   <div className="flex items-center space-x-2">
                     <span className="font-medium text-foreground">
-                      {formatPhoneNumber((notification as MissedCallNotification).customerPhone)}
+                      {formatPhoneNumber((notification as MissedCallNotificationType).customerPhone)}
                     </span>
                     <Badge className={`text-xs ${
-                      (notification as MissedCallNotification).reason === 'timeout' ? 'bg-yellow-50 text-yellow-600' :
-                      (notification as MissedCallNotification).reason === 'not-ready' ? 'bg-orange-50 text-orange-600' :
-                      (notification as MissedCallNotification).reason === 'disconnected' ? 'bg-red-50 text-red-600' :
+                      (notification as MissedCallNotificationType).reason === 'timeout' ? 'bg-yellow-50 text-yellow-600' :
+                      (notification as MissedCallNotificationType).reason === 'not-ready' ? 'bg-orange-50 text-orange-600' :
+                      (notification as MissedCallNotificationType).reason === 'disconnected' ? 'bg-red-50 text-red-600' :
                       'bg-muted/50 text-muted-foreground'
                     }`}>
-                      {(notification as MissedCallNotification).reason === 'timeout' ? 'Không trả lời' :
-                       (notification as MissedCallNotification).reason === 'not-ready' ? 'Không sẵn sàng' :
-                       (notification as MissedCallNotification).reason === 'disconnected' ? 'Mất kết nối' : 'Tạm vắng'}
+                      {(notification as MissedCallNotificationType).reason === 'timeout' ? 'Không trả lời' :
+                       (notification as MissedCallNotificationType).reason === 'not-ready' ? 'Không sẵn sàng' :
+                       (notification as MissedCallNotificationType).reason === 'disconnected' ? 'Mất kết nối' : 'Tạm vắng'}
                     </Badge>
                   </div>
                   
-                  {(notification as MissedCallNotification).customerName && (
-                    <p className="text-sm text-muted-foreground">{(notification as MissedCallNotification).customerName}</p>
+                  {(notification as MissedCallNotificationType).customerName && (
+                    <p className="text-sm text-muted-foreground">{(notification as MissedCallNotificationType).customerName}</p>
                   )}
                   
                   <div className="flex items-center space-x-2 text-xs text-muted-foreground">
                     <Clock className="h-3 w-3" />
                     <span>{formatTime(notification.createdAt)}</span>
                     <span>•</span>
-                    <span>{(notification as MissedCallNotification).source}</span>
+                    <span>{(notification as MissedCallNotificationType).source}</span>
                   </div>
                 </div>
               </div>
@@ -410,7 +385,7 @@ export function NotificationCenter({
                   Ưu tiên cao
                 </Badge>
               )}
-              {notification.type === 'missed-call' && (notification as MissedCallNotification).isVIP && (
+              {notification.type === 'missed-call' && (notification as MissedCallNotificationType).isVIP && (
                 <Badge className="text-xs bg-yellow-100 text-yellow-800 border-yellow-200">
                   <Crown className="h-3 w-3 mr-1" />
                   VIP

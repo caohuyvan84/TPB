@@ -1,25 +1,15 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Separator } from "@/components/ui/separator";
-import { useEnhancedAgentStatus as useAgentStatus, ChannelType, NotReadyReason } from "@/components/EnhancedAgentStatusContext";
-import { AgentSettingsSidebar } from "@/components/AgentSettingsSidebar";
+import { Button } from './ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Badge } from './ui/badge';
+import { Switch } from './ui/switch';
+import { Label } from './ui/label';
+import { Textarea } from './ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Separator } from './ui/separator';
+import { useEnhancedAgentStatus, ChannelType, NotReadyReason } from './EnhancedAgentStatusContext';
+import { AgentSettingsSidebar } from './AgentSettingsSidebar';
 import { 
   Phone, 
   Mail, 
@@ -108,7 +98,7 @@ interface ChannelStatusCardProps {
 }
 
 function ChannelStatusCard({ channel, compact = false }: ChannelStatusCardProps) {
-  const { getChannelStatus, setChannelStatus, isChannelReady } = useAgentStatus();
+  const { getChannelStatus, setChannelStatus, isChannelReady } = useEnhancedAgentStatus();
   const [selectedReason, setSelectedReason] = useState<NotReadyReason>('break');
   const [customReason, setCustomReason] = useState('');
   const [isChanging, setIsChanging] = useState(false);
@@ -426,7 +416,7 @@ export function AgentChannelStatus({ compact = false }: AgentChannelStatusProps)
     getReadyChannelsCount, 
     getTotalChannelsCount, 
     setAllChannelsStatus 
-  } = useAgentStatus();
+  } = useEnhancedAgentStatus();
   const [bulkAction, setBulkAction] = useState<'ready' | 'not-ready' | null>(null);
   const [selectedReason, setSelectedReason] = useState<NotReadyReason>('break');
   const [customReason, setCustomReason] = useState('');

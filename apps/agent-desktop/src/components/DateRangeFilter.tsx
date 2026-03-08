@@ -1,16 +1,12 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+import { Button } from './ui/button';
+import { Calendar } from './ui/calendar';
+import { Input } from './ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Label } from './ui/label';
+import { Separator } from './ui/separator';
 import { Calendar as CalendarIcon, X, Clock, Check } from "lucide-react";
-import { cn } from "@/components/ui/utils";
+import { cn } from './ui/utils';
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 
@@ -18,6 +14,7 @@ export type DateRangePreset =
   | "all"
   | "today"
   | "yesterday"
+  | "last7days"
   | "thisWeek"
   | "lastWeek"
   | "thisMonth"
@@ -65,6 +62,11 @@ export function DateRangeFilter({ value, onChange, compact = false }: DateRangeF
       case "yesterday": {
         const yesterday = new Date(today.getTime() - 86400000);
         return { from: yesterday, to: new Date(yesterday.getTime() + 86400000 - 1) };
+      }
+      
+      case "last7days": {
+        const sevenDaysAgo = new Date(today.getTime() - 7 * 86400000);
+        return { from: sevenDaysAgo, to: now };
       }
       
       case "thisWeek": {
@@ -159,6 +161,7 @@ export function DateRangeFilter({ value, onChange, compact = false }: DateRangeF
     switch (preset) {
       case "today": return "Hôm nay";
       case "yesterday": return "Hôm qua";
+      case "last7days": return "7 ngày qua";
       case "thisWeek": return "Tuần này";
       case "lastWeek": return "Tuần trước";
       case "thisMonth": return "Tháng này";
