@@ -1,0 +1,30 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "lib": ["ES2022", "DOM"],
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["apps/agent-desktop/src/*"],
+      "@admin/*": ["apps/admin-module/src/*"],
+      "@shared/types": ["packages/shared-types/src/index.ts"],
+      "@shared/dto": ["packages/shared-dto/src/index.ts"],
+      "@shared/utils": ["packages/shared-utils/src/index.ts"],
+      "@api-client": ["packages/api-client/src/index.ts"],
+      "@ws-client": ["packages/ws-client/src/index.ts"],
+      "@nest-common": ["libs/nest-common/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "tmp"]
+}
