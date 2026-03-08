@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { queryClient } from './lib/query-client';
 import { Button } from './components/ui/button';
 import { Toaster } from './components/ui/sonner';
 // Agent Desktop Application with multi-channel support
@@ -1422,13 +1425,16 @@ function AppContent() {
 
 export default function App() {
   return (
-    <NotificationProvider>
-      <EnhancedAgentStatusProvider agentId="AGT001" agentName="Agent Tung">
-        <CallProvider>
-          <AppContent />
-          <Toaster position="top-right" />
-        </CallProvider>
-      </EnhancedAgentStatusProvider>
-    </NotificationProvider>
+    <QueryClientProvider client={queryClient}>
+      <NotificationProvider>
+        <EnhancedAgentStatusProvider agentId="AGT001" agentName="Agent Tung">
+          <CallProvider>
+            <AppContent />
+            <Toaster position="top-right" />
+          </CallProvider>
+        </EnhancedAgentStatusProvider>
+      </NotificationProvider>
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
   );
 }

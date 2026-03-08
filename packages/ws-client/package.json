@@ -1,0 +1,9 @@
+{
+  "name": "ws-client",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "dependencies": {}
+}

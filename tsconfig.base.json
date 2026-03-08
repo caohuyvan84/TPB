@@ -24,7 +24,9 @@
       "@api-client": ["packages/api-client/src/index.ts"],
       "@ws-client": ["packages/ws-client/src/index.ts"],
       "@nest-common": ["libs/nest-common/src/index.ts"],
-      "nest-common": ["libs/nest-common/src/index.ts"]
+      "nest-common": ["libs/nest-common/src/index.ts"],
+      "api-client": ["packages/api-client/src/index.ts"],
+      "ws-client": ["packages/ws-client/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]
