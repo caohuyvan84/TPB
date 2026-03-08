@@ -169,13 +169,13 @@ This is a 2-week sprint focused on infrastructure, tooling, and project structur
     - Create index.ts with exports
     - _Requirements: 1.6_
 
-  - [-] 1.6 Create shared-dto package with Zod schemas
+  - [x] 1.6 Create shared-dto package with Zod schemas
     - Generate library: `nx g @nx/js:lib shared-dto`
     - Install Zod dependency
     - Create initial DTO schemas
     - _Requirements: 1.7_
 
-  - [ ] 1.7 Verify monorepo build
+  - [-] 1.7 Verify monorepo build
     - Run `nx build agent-desktop`
     - Verify build completes successfully
     - Test that UI renders correctly
