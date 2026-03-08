@@ -52,7 +52,7 @@ inclusion: always
 
 **Goal:** Agent Desktop with real data - no more mock data for core flows
 
-**Status:** 🟡 In Progress (12/73 tasks completed - 16%)
+**Status:** 🟡 In Progress (14/73 tasks completed - 19%)
 
 **Go-Live 1 Milestone:** Agent Desktop with real backend APIs
 
@@ -74,8 +74,8 @@ inclusion: always
 - [x] Task 3.3: Seed initial roles and permissions data
 - [ ] Task 3.4: Write integration tests for authentication endpoints
 - [x] Task 4.1: Implement GET /api/v1/users/me endpoint
-- [ ] Task 4.2: Implement session tracking and audit logging
-- [ ] Task 4.3: Configure Redis for token blacklist and caching
+- [x] Task 4.2: Implement session tracking and audit logging
+- [x] Task 4.3: Configure Redis for token blacklist and caching
 - [ ] Task 5.1: Configure Kong API Gateway for Identity Service
 - [ ] Task 5.2: Checkpoint - Verify authentication flow end-to-end
 
