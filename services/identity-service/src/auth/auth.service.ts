@@ -5,6 +5,7 @@ import { User, RefreshToken, LoginAttempt } from '../entities';
 import { PasswordService } from './password.service';
 import { TokenService, JwtPayload } from './token.service';
 import { MfaService } from './mfa.service';
+import { RedisService } from '../common/redis.service';
 import { LoginDto } from './dto/auth.dto';
 import * as crypto from 'crypto';
 
@@ -20,6 +21,7 @@ export class AuthService {
     private passwordService: PasswordService,
     private tokenService: TokenService,
     private mfaService: MfaService,
+    private redisService: RedisService,
   ) {}
 
   async login(loginDto: LoginDto, ip: string, userAgent: string) {
@@ -81,6 +83,12 @@ export class AuthService {
   async refreshTokens(refreshToken: string, ip: string, userAgent: string) {
     const tokenHash = this.hashToken(refreshToken);
     
+    // Check Redis blacklist
+    const isBlacklisted = await this.redisService.exists(`blacklist:${tokenHash}`);
+    if (isBlacklisted) {
+      throw new Error('Token has been revoked');
+    }
+    
     const storedToken = await this.refreshTokenRepository.findOne({
       where: { tokenHash, revoked: false },
       relations: ['user', 'user.roles'],
@@ -90,9 +98,10 @@ export class AuthService {
       throw new Error('Invalid refresh token');
     }
 
-    // Revoke old token
+    // Revoke old token and add to blacklist
     storedToken.revoked = true;
     await this.refreshTokenRepository.save(storedToken);
+    await this.redisService.setex(`blacklist:${tokenHash}`, 7 * 24 * 60 * 60, '1');
 
     // Generate new tokens
     return this.generateTokens(storedToken.user, ip, userAgent);
@@ -101,6 +110,7 @@ export class AuthService {
   async logout(refreshToken: string) {
     const tokenHash = this.hashToken(refreshToken);
     await this.refreshTokenRepository.update({ tokenHash }, { revoked: true });
+    await this.redisService.setex(`blacklist:${tokenHash}`, 7 * 24 * 60 * 60, '1');
   }
 
   private async generateTokens(user: User, ip: string, userAgent: string) {
@@ -118,13 +128,27 @@ export class AuthService {
 
     // Store refresh token
     const tokenHash = this.hashToken(refreshToken);
-    await this.refreshTokenRepository.save({
+    const refreshTokenEntity = await this.refreshTokenRepository.save({
       userId: user.id,
       tokenHash,
       ipAddress: ip,
       userAgent,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     });
+
+    // Store session in Redis (15 min TTL)
+    await this.redisService.setex(
+      `session:${user.id}`,
+      900,
+      JSON.stringify({
+        userId: user.id,
+        username: user.username,
+        agentId: user.agentId,
+        ip,
+        userAgent,
+        loginAt: new Date().toISOString(),
+      })
+    );
 
     return {
       accessToken,
@@ -230,5 +254,20 @@ export class AuthService {
       mfaEnabled: false,
       mfaSecret: null,
     });
+  }
+
+  async getUserSessions(userId: string) {
+    const tokens = await this.refreshTokenRepository.find({
+      where: { userId, revoked: false },
+      order: { createdAt: 'DESC' },
+    });
+
+    return tokens.map(token => ({
+      id: token.id,
+      ipAddress: token.ipAddress,
+      userAgent: token.userAgent,
+      createdAt: token.createdAt,
+      expiresAt: token.expiresAt,
+    }));
   }
 }

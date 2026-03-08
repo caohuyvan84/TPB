@@ -12,6 +12,7 @@ import { MfaService } from './mfa.service';
 import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
+import { RedisService } from '../common/redis.service';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { PermissionsGuard } from '../guards/permissions.guard';
     JwtStrategy,
     JwtAuthGuard,
     PermissionsGuard,
+    RedisService,
   ],
   exports: [AuthService, TokenService, JwtAuthGuard, PermissionsGuard],
 })

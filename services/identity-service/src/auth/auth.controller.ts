@@ -48,4 +48,11 @@ export class AuthController {
     const userAgent = req.headers['user-agent'];
     return this.authService.verifyMfa(mfaDto.token, mfaDto.code, ip, userAgent);
   }
+
+  @Get('sessions')
+  @HttpCode(HttpStatus.OK)
+  async getSessions(@Req() req: any) {
+    const userId = req.user?.userId;
+    return this.authService.getUserSessions(userId);
+  }
 }
