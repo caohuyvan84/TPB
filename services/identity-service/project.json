@@ -59,6 +59,20 @@
           "buildTarget": "identity-service:build:production"
         }
       }
+    },
+    "migration:run": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "typeorm-ts-node-commonjs migration:run -d src/config/typeorm.config.ts",
+        "cwd": "services/identity-service"
+      }
+    },
+    "migration:revert": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "typeorm-ts-node-commonjs migration:revert -d src/config/typeorm.config.ts",
+        "cwd": "services/identity-service"
+      }
     }
   },
   "tags": []
