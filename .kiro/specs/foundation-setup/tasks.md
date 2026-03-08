@@ -21,7 +21,7 @@ This is a 2-week sprint focused on infrastructure, tooling, and project structur
     - Set up package manager (npm)
     - _Requirements: 1.3_
 
-  - [-] 1.3 Migrate existing frontend to apps/agent-desktop and upgrade to React 19.2.x
+  - [x] 1.3 Migrate existing frontend to apps/agent-desktop and upgrade to React 19.2.x
     - **Step 1: Backup and Move**
       - Create backup of existing /src directory
       - Move existing /src directory to apps/agent-desktop/src
@@ -156,7 +156,7 @@ This is a 2-week sprint focused on infrastructure, tooling, and project structur
     - _Risk Level: HIGH - This is a major version upgrade_
     - _Rollback Plan: Restore from backup if critical issues found_
 
-  - [ ] 1.4 Create admin-module skeleton application with React 19
+  - [-] 1.4 Create admin-module skeleton application with React 19
     - Generate new React app: `nx g @nx/react:app admin-module`
     - Configure Vite 6.x build tool
     - Set up React 19.2.x and TypeScript 5.7
