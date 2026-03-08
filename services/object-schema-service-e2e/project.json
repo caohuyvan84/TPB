@@ -1,0 +1,17 @@
+{
+  "name": "object-schema-service-e2e",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "implicitDependencies": ["object-schema-service"],
+  "projectType": "application",
+  "targets": {
+    "e2e": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{e2eProjectRoot}"],
+      "options": {
+        "jestConfig": "services/object-schema-service-e2e/jest.config.cts",
+        "passWithNoTests": true
+      },
+      "dependsOn": ["object-schema-service:build", "object-schema-service:serve"]
+    }
+  }
+}

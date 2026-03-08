@@ -11,7 +11,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
       - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
@@ -39,6 +39,7 @@ services:
   kafka:
     image: apache/kafka:4.2.0
     container_name: tpb-kafka
+    user: root
     ports:
       - "9092:9092"
     environment:
@@ -57,10 +58,11 @@ services:
     volumes:
       - kafka_data:/tmp/kraft-combined-logs
     healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      test: ["CMD-SHELL", "kafka-metadata.sh --snapshot /tmp/kraft-combined-logs/__cluster_metadata-0/00000000000000000000.log --print-records | head -1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
+      start_period: 40s
     networks:
       - tpb-network
 
@@ -130,7 +132,7 @@ services:
     ports:
       - "7233:7233"
     environment:
-      - DB=postgresql
+      - DB=postgres12_pgx
       - DB_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PWD=${POSTGRES_PASSWORD:-postgres}

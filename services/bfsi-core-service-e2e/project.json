@@ -1,0 +1,17 @@
+{
+  "name": "bfsi-core-service-e2e",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "implicitDependencies": ["bfsi-core-service"],
+  "projectType": "application",
+  "targets": {
+    "e2e": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{e2eProjectRoot}"],
+      "options": {
+        "jestConfig": "services/bfsi-core-service-e2e/jest.config.cts",
+        "passWithNoTests": true
+      },
+      "dependsOn": ["bfsi-core-service:build", "bfsi-core-service:serve"]
+    }
+  }
+}
