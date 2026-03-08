@@ -60,7 +60,7 @@ export class AuthService {
 
     // Reset failed attempts
     user.failedLoginAttempts = 0;
-    user.lockedUntil = null;
+    user.lockedUntil = undefined;
     user.lastLoginAt = new Date();
     await this.userRepository.save(user);
 
@@ -252,7 +252,7 @@ export class AuthService {
   async disableMfa(userId: string) {
     await this.userRepository.update(userId, {
       mfaEnabled: false,
-      mfaSecret: null,
+      mfaSecret: undefined,
     });
   }
 

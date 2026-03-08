@@ -40,13 +40,13 @@ export class User {
   lockedUntil: Date;
 
   @Column({ name: 'tenant_id', type: 'uuid' })
-  tenantId: string;
+  tenantId!: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @ManyToMany(() => Role)
   @JoinTable({
@@ -54,5 +54,5 @@ export class User {
     joinColumn: { name: 'user_id', referencedColumnName: 'id' },
     inverseJoinColumn: { name: 'role_id', referencedColumnName: 'id' },
   })
-  roles: Role[];
+  roles!: Role[];
 }
