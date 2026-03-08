@@ -1,0 +1,55 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - agent-desktop
+          - admin-module
+          - identity-service
+          - agent-service
+          - interaction-service
+          - ticket-service
+          - customer-service
+          - notification-service
+          - knowledge-service
+          - bfsi-core-service
+          - ai-service
+          - media-service
+          - audit-service
+          - object-schema-service
+          - layout-service
+          - workflow-service
+          - data-enrichment-service
+          - dashboard-service
+          - report-service
+          - cti-adapter-service
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+      
+      - name: Build ${{ matrix.target }}
+        run: npx nx build ${{ matrix.target }}
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}-build
+          path: dist/${{ matrix.target }}
+          retention-days: 7
