@@ -1,73 +1,49 @@
-import { Route, Routes, Link } from 'react-router-dom';
-import styles from './app.module.css';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AdminAuthProvider } from '../contexts/AdminAuthContext';
+import { AdminLoginPage } from '../pages/AdminLoginPage';
+import { AdminPrivateRoute } from '../components/AdminPrivateRoute';
+import { AdminDashboard } from '../pages/AdminDashboard';
+import { UserManagement } from '../pages/UserManagement';
+import { SystemSettings } from '../pages/SystemSettings';
+import { RoleManagement } from '../pages/RoleManagement';
+import { AuditLogViewer } from '../pages/AuditLogViewer';
+import { CTIConfig } from '../pages/CTIConfig';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 export function App() {
   return (
-    <div className={styles.app}>
-      <header className={styles.header}>
-        <h1>TPB CRM - Admin Module</h1>
-        <p>System Configuration & Management</p>
-      </header>
-
-      <nav className={styles.nav}>
-        <ul>
-          <li>
-            <Link to="/">Dashboard</Link>
-          </li>
-          <li>
-            <Link to="/schema">Schema Management</Link>
-          </li>
-          <li>
-            <Link to="/users">User Management</Link>
-          </li>
-          <li>
-            <Link to="/settings">Settings</Link>
-          </li>
-        </ul>
-      </nav>
-
-      <main className={styles.main}>
+    <QueryClientProvider client={queryClient}>
+      <AdminAuthProvider>
         <Routes>
+          <Route path="/login" element={<AdminLoginPage />} />
           <Route
-            path="/"
+            path="/*"
             element={
-              <div>
-                <h2>Admin Dashboard</h2>
-                <p>Welcome to the TPB CRM Admin Module</p>
-                <p>This is a skeleton application that will be developed in Phase 1.</p>
-              </div>
-            }
-          />
-          <Route
-            path="/schema"
-            element={
-              <div>
-                <h2>Schema Management</h2>
-                <p>Dynamic schema configuration will be implemented here.</p>
-              </div>
-            }
-          />
-          <Route
-            path="/users"
-            element={
-              <div>
-                <h2>User Management</h2>
-                <p>User and role management will be implemented here.</p>
-              </div>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <div>
-                <h2>System Settings</h2>
-                <p>System configuration will be implemented here.</p>
-              </div>
+              <AdminPrivateRoute>
+                <Routes>
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/dashboard" element={<AdminDashboard />} />
+                  <Route path="/users" element={<UserManagement />} />
+                  <Route path="/roles" element={<RoleManagement />} />
+                  <Route path="/audit" element={<AuditLogViewer />} />
+                  <Route path="/cti-config" element={<CTIConfig />} />
+                  <Route path="/settings" element={<SystemSettings />} />
+                </Routes>
+              </AdminPrivateRoute>
             }
           />
         </Routes>
-      </main>
-    </div>
+      </AdminAuthProvider>
+    </QueryClientProvider>
   );
 }
 

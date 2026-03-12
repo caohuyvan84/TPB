@@ -32,6 +32,6 @@ import { RedisService } from '../common/redis.service';
     PermissionsGuard,
     RedisService,
   ],
-  exports: [AuthService, TokenService, JwtAuthGuard, PermissionsGuard],
+  exports: [AuthService, TokenService, JwtAuthGuard, PermissionsGuard, PasswordService],
 })
 export class AuthModule {}
