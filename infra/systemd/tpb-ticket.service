@@ -1,0 +1,18 @@
+[Unit]
+Description=TPB Ticket Service
+After=network.target postgresql.service redis.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/project/AgentdesktopTPB
+Environment="NODE_ENV=production"
+Environment="PORT=3004"
+ExecStart=/usr/bin/npx nx run ticket-service:serve
+Restart=always
+RestartSec=10
+StandardOutput=append:/opt/project/AgentdesktopTPB/logs/ticket-service.log
+StandardError=append:/opt/project/AgentdesktopTPB/logs/ticket-service.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,238 @@
+import { DataSource, Repository } from 'typeorm';
+import { RefreshToken } from './refresh-token.entity';
+import { User } from './user.entity';
+import { createTestDataSource } from './test-data-source';
+
+describe('RefreshToken Entity', () => {
+  let dataSource: DataSource;
+  let tokenRepository: Repository<RefreshToken>;
+  let userRepository: Repository<User>;
+
+  beforeAll(async () => {
+    dataSource = await createTestDataSource();
+    tokenRepository = dataSource.getRepository(RefreshToken);
+    userRepository = dataSource.getRepository(User);
+  });
+
+  afterAll(async () => {
+    await dataSource.destroy();
+  });
+
+  beforeEach(async () => {
+    await tokenRepository.query('TRUNCATE TABLE refresh_tokens RESTART IDENTITY CASCADE');
+    await userRepository.query('TRUNCATE TABLE users RESTART IDENTITY CASCADE');
+  });
+
+  describe('Entity Creation', () => {
+    it('should create a refresh token with required fields', async () => {
+      const user = await userRepository.save({
+        username: 'tokenuser',
+        email: 'token@example.com',
+        fullName: 'Token User',
+        passwordHash: '$2b$12$hash',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const token = tokenRepository.create({
+        userId: user.id,
+        tokenHash: '$2b$12$hashed_refresh_token',
+        expiresAt,
+        ipAddress: '192.168.1.1',
+        userAgent: 'Mozilla/5.0',
+      });
+
+      const savedToken = await tokenRepository.save(token);
+
+      expect(savedToken.id).toBeDefined();
+      expect(savedToken.userId).toBe(user.id);
+      expect(savedToken.tokenHash).toBe('$2b$12$hashed_refresh_token');
+      expect(savedToken.revoked).toBe(false);
+      expect(savedToken.ipAddress).toBe('192.168.1.1');
+      expect(savedToken.userAgent).toBe('Mozilla/5.0');
+      expect(savedToken.createdAt).toBeInstanceOf(Date);
+    });
+
+    it('should have default revoked as false', async () => {
+      const user = await userRepository.save({
+        username: 'defaultuser',
+        email: 'default@example.com',
+        fullName: 'Default User',
+        passwordHash: '$2b$12$hash',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      const token = tokenRepository.create({
+        userId: user.id,
+        tokenHash: '$2b$12$hash',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      });
+
+      const savedToken = await tokenRepository.save(token);
+
+      expect(savedToken.revoked).toBe(false);
+    });
+  });
+
+  describe('Relationships', () => {
+    it('should have many-to-one relationship with user', async () => {
+      const user = await userRepository.save({
+        username: 'reluser',
+        email: 'rel@example.com',
+        fullName: 'Rel User',
+        passwordHash: '$2b$12$hash',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      const token = await tokenRepository.save({
+        userId: user.id,
+        tokenHash: '$2b$12$hash',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      });
+
+      const foundToken = await tokenRepository.findOne({
+        where: { id: token.id },
+        relations: ['user'],
+      });
+
+      expect(foundToken?.user).toBeDefined();
+      expect(foundToken?.user.username).toBe('reluser');
+    });
+
+    it('should cascade delete when user is deleted', async () => {
+      const user = await userRepository.save({
+        username: 'cascadeuser',
+        email: 'cascade@example.com',
+        fullName: 'Cascade User',
+        passwordHash: '$2b$12$hash',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      await tokenRepository.save({
+        userId: user.id,
+        tokenHash: '$2b$12$hash1',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      });
+
+      await userRepository.delete(user.id);
+
+      const tokens = await tokenRepository.find({ where: { userId: user.id } });
+      expect(tokens).toHaveLength(0);
+    });
+  });
+
+  describe('Token Rotation', () => {
+    it('should support multiple tokens per user', async () => {
+      const user = await userRepository.save({
+        username: 'multitoken',
+        email: 'multi@example.com',
+        fullName: 'Multi Token User',
+        passwordHash: '$2b$12$hash',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      await tokenRepository.save([
+        {
+          userId: user.id,
+          tokenHash: '$2b$12$hash1',
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          ipAddress: '192.168.1.1',
+        },
+        {
+          userId: user.id,
+          tokenHash: '$2b$12$hash2',
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          ipAddress: '192.168.1.2',
+        },
+      ]);
+
+      const tokens = await tokenRepository.find({ where: { userId: user.id } });
+      expect(tokens).toHaveLength(2);
+    });
+
+    it('should mark token as revoked', async () => {
+      const user = await userRepository.save({
+        username: 'revokeuser',
+        email: 'revoke@example.com',
+        fullName: 'Revoke User',
+        passwordHash: '$2b$12$hash',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      const token = await tokenRepository.save({
+        userId: user.id,
+        tokenHash: '$2b$12$hash',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      });
+
+      token.revoked = true;
+      const updatedToken = await tokenRepository.save(token);
+
+      expect(updatedToken.revoked).toBe(true);
+    });
+  });
+
+  describe('Session Tracking', () => {
+    it('should store IP address and user agent', async () => {
+      const user = await userRepository.save({
+        username: 'sessionuser',
+        email: 'session@example.com',
+        fullName: 'Session User',
+        passwordHash: '$2b$12$hash',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      const token = await tokenRepository.save({
+        userId: user.id,
+        tokenHash: '$2b$12$hash',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        ipAddress: '10.0.0.1',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      });
+
+      expect(token.ipAddress).toBe('10.0.0.1');
+      expect(token.userAgent).toContain('Windows NT 10.0');
+    });
+
+    it('should handle IPv6 addresses', async () => {
+      const user = await userRepository.save({
+        username: 'ipv6user',
+        email: 'ipv6@example.com',
+        fullName: 'IPv6 User',
+        passwordHash: '$2b$12$hash',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      const token = await tokenRepository.save({
+        userId: user.id,
+        tokenHash: '$2b$12$hash',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        ipAddress: '2001:0db8:85a3:0000:0000:8a2e:0370:7334',
+      });
+
+      expect(token.ipAddress).toBe('2001:0db8:85a3:0000:0000:8a2e:0370:7334');
+    });
+  });
+
+  describe('Expiration', () => {
+    it('should store expiration timestamp', async () => {
+      const user = await userRepository.save({
+        username: 'expireuser',
+        email: 'expire@example.com',
+        fullName: 'Expire User',
+        passwordHash: '$2b$12$hash',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      const expiresAt = new Date('2026-03-16T00:00:00Z');
+      const token = await tokenRepository.save({
+        userId: user.id,
+        tokenHash: '$2b$12$hash',
+        expiresAt,
+      });
+
+      expect(token.expiresAt).toBeInstanceOf(Date);
+      expect(token.expiresAt.toISOString()).toBe('2026-03-16T00:00:00.000Z');
+    });
+  });
+});

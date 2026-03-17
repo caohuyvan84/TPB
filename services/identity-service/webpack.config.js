@@ -22,4 +22,12 @@ module.exports = {
       sourceMap: true,
     }),
   ],
+  module: {
+    rules: [
+      {
+        test: /\.spec\.ts$/,
+        loader: 'ignore-loader',
+      },
+    ],
+  },
 };

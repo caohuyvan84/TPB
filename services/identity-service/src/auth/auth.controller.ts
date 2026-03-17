@@ -12,8 +12,8 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() loginDto: LoginDto, @Req() req: Request) {
-    const ip = req.ip;
-    const userAgent = req.headers['user-agent'];
+    const ip = req.ip || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
     return this.authService.login(loginDto, ip, userAgent);
   }
 
@@ -21,8 +21,8 @@ export class AuthController {
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(@Body() refreshDto: RefreshTokenDto, @Req() req: Request) {
-    const ip = req.ip;
-    const userAgent = req.headers['user-agent'];
+    const ip = req.ip || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
     return this.authService.refreshTokens(refreshDto.refreshToken, ip, userAgent);
   }
 
@@ -44,8 +44,8 @@ export class AuthController {
   @Post('mfa/verify')
   @HttpCode(HttpStatus.OK)
   async verifyMfa(@Body() mfaDto: MfaVerifyDto, @Req() req: Request) {
-    const ip = req.ip;
-    const userAgent = req.headers['user-agent'];
+    const ip = req.ip || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
     return this.authService.verifyMfa(mfaDto.token, mfaDto.code, ip, userAgent);
   }
 

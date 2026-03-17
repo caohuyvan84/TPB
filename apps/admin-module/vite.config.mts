@@ -8,18 +8,21 @@ export default defineConfig(() => ({
   root: import.meta.dirname,
   cacheDir: '../../node_modules/.vite/admin-module',
   server: {
-    port: 3001,
-    host: 'localhost',
+    port: 3020,
+    host: '0.0.0.0',
   },
   preview: {
-    port: 3001,
-    host: 'localhost',
+    port: 3020,
+    host: '0.0.0.0',
   },
   plugins: [react(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
   build: {
     outDir: '../../dist/apps/admin-module',
     emptyOutDir: true,
     reportCompressedSize: true,
+    rollupOptions: {
+      input: './index.html',
+    },
     commonjsOptions: {
       transformMixedEsModules: true,
     },

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { Card, CardContent } from './ui/card';
+import { useCreateTicket } from '../hooks/useTickets';
 import { 
   FileText, 
   Plus, 
@@ -30,7 +31,7 @@ import {
   MapPin,
   PhoneCall
 } from "lucide-react";
-import { toast } from "sonner"; // Fix: remove version from import path
+import { toast } from "sonner";
 
 interface CreateTicketDialogProps {
   open: boolean;
@@ -41,8 +42,9 @@ interface CreateTicketDialogProps {
 }
 
 export function CreateTicketDialog({ open, onOpenChange, interaction, contact, queryObject }: CreateTicketDialogProps) {
-  const [mode, setMode] = useState<'edit' | 'view'>('edit'); // edit or view mode
-  const [savedTicket, setSavedTicket] = useState<any>(null); // saved ticket data
+  const createTicket = useCreateTicket();
+  const [mode, setMode] = useState<'edit' | 'view'>('edit');
+  const [savedTicket, setSavedTicket] = useState<any>(null);
   const [ticketData, setTicketData] = useState({
     title: '',
     description: '',
@@ -74,7 +76,7 @@ export function CreateTicketDialog({ open, onOpenChange, interaction, contact, q
     'Product Team'
   ];
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!ticketData.title.trim()) {
       toast.error('Vui lòng nhập tiêu đề ticket');
       return;
@@ -85,24 +87,22 @@ export function CreateTicketDialog({ open, onOpenChange, interaction, contact, q
       return;
     }
 
-    const newTicket = {
-      ...ticketData,
-      id: `TKT-${Date.now()}`,
-      number: `TKT-${Date.now()}`,
-      status: 'in-progress',
-      interactionId: interaction?.id,
-      customerName: interaction?.customerName,
-      createdBy: 'Agent Tung',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+    try {
+      const result = await createTicket.mutateAsync({
+        title: ticketData.title,
+        description: ticketData.description,
+        priority: ticketData.priority,
+        category: ticketData.category,
+        customerId: interaction?.customerId || contact?.id,
+        interactionId: interaction?.id,
+      });
 
-    console.log('Creating ticket:', newTicket);
-    
-    // Save ticket and switch to view mode
-    setSavedTicket(newTicket);
-    setMode('view');
-    toast.success('Ticket đã được tạo thành công');
+      setSavedTicket(result);
+      setMode('view');
+    } catch (error) {
+      // Error toast already shown by mutation
+      console.error('Failed to create ticket:', error);
+    }
   };
 
   const handleEdit = () => {
@@ -213,7 +213,7 @@ export function CreateTicketDialog({ open, onOpenChange, interaction, contact, q
                   <Check className="h-3 w-3 mr-1" />
                   Đã tạo thành công
                 </Badge>
-                <span className="text-xs text-muted-foreground">{savedTicket.number}</span>
+                <span className="text-xs text-muted-foreground">{savedTicket.displayId}</span>
               </div>
 
               <Separator />
@@ -267,8 +267,8 @@ export function CreateTicketDialog({ open, onOpenChange, interaction, contact, q
                 <div>
                   <Label className="text-xs text-muted-foreground">Hạn xử lý</Label>
                   <p className="text-sm font-medium mt-1">
-                    {savedTicket.dueDate 
-                      ? new Date(savedTicket.dueDate).toLocaleDateString('vi-VN')
+                    {savedTicket.dueAt
+                      ? new Date(savedTicket.dueAt).toLocaleDateString('vi-VN')
                       : 'Chưa đặt'}
                   </p>
                 </div>
@@ -305,10 +305,6 @@ export function CreateTicketDialog({ open, onOpenChange, interaction, contact, q
               {/* Additional Info - Created By & Created At */}
               <div className="bg-muted/50 p-3 rounded-lg">
                 <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <span className="text-muted-foreground">Người tạo:</span>
-                    <p className="font-medium mt-0.5">{savedTicket.createdBy}</p>
-                  </div>
                   <div>
                     <span className="text-muted-foreground">Ngày tạo:</span>
                     <p className="font-medium mt-0.5">
@@ -711,16 +707,16 @@ export function CreateTicketDialog({ open, onOpenChange, interaction, contact, q
           ) : (
             /* Edit Mode Buttons */
             <>
-              <Button variant="outline" onClick={handleClose}>
+              <Button variant="outline" onClick={handleClose} disabled={createTicket.isPending}>
                 Hủy
               </Button>
               <Button 
                 onClick={handleCreate}
-                disabled={!ticketData.title || !ticketData.description}
+                disabled={!ticketData.title || !ticketData.description || createTicket.isPending}
                 className="bg-[#155DFC] hover:bg-[#1348D6]"
               >
                 <FileText className="h-4 w-4 mr-2" />
-                Tạo Ticket
+                {createTicket.isPending ? 'Đang tạo...' : 'Tạo Ticket'}
               </Button>
             </>
           )}

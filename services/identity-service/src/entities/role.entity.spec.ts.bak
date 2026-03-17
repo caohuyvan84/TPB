@@ -1,0 +1,151 @@
+import { DataSource, Repository } from 'typeorm';
+import { Role } from './role.entity';
+import { createTestDataSource } from './test-data-source';
+
+describe('Role Entity', () => {
+  let dataSource: DataSource;
+  let roleRepository: Repository<Role>;
+
+  beforeAll(async () => {
+    dataSource = await createTestDataSource();
+    roleRepository = dataSource.getRepository(Role);
+  });
+
+  afterAll(async () => {
+    await dataSource.destroy();
+  });
+
+  beforeEach(async () => {
+    await roleRepository.query('TRUNCATE TABLE roles RESTART IDENTITY CASCADE');
+  });
+
+  describe('Entity Creation', () => {
+    it('should create a role with required fields', async () => {
+      const role = roleRepository.create({
+        name: 'agent',
+        description: 'Agent role',
+        permissions: ['read:interactions', 'write:tickets'],
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      const savedRole = await roleRepository.save(role);
+
+      expect(savedRole.id).toBeDefined();
+      expect(savedRole.name).toBe('agent');
+      expect(savedRole.description).toBe('Agent role');
+      expect(savedRole.permissions).toHaveLength(2);
+      expect(savedRole.permissions).toContain('read:interactions');
+      expect(savedRole.permissions).toContain('write:tickets');
+      expect(savedRole.createdAt).toBeInstanceOf(Date);
+      expect(savedRole.updatedAt).toBeInstanceOf(Date);
+    });
+
+    it('should have default empty permissions array', async () => {
+      const role = roleRepository.create({
+        name: 'empty_role',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      const savedRole = await roleRepository.save(role);
+
+      expect(savedRole.permissions).toEqual([]);
+    });
+  });
+
+  describe('Constraints', () => {
+    it('should enforce unique role name', async () => {
+      const role1 = roleRepository.create({
+        name: 'duplicate_role',
+        permissions: ['perm1'],
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+      await roleRepository.save(role1);
+
+      const role2 = roleRepository.create({
+        name: 'duplicate_role',
+        permissions: ['perm2'],
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      await expect(roleRepository.save(role2)).rejects.toThrow();
+    });
+  });
+
+  describe('JSONB Permissions', () => {
+    it('should store complex permission structures', async () => {
+      const role = roleRepository.create({
+        name: 'complex_role',
+        permissions: [
+          'read:interactions:own',
+          'write:tickets:team',
+          'delete:notes:own',
+          'manage:agents:department',
+        ],
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      const savedRole = await roleRepository.save(role);
+
+      expect(savedRole.permissions).toHaveLength(4);
+      expect(savedRole.permissions).toContain('read:interactions:own');
+      expect(savedRole.permissions).toContain('manage:agents:department');
+    });
+
+    it('should update permissions array', async () => {
+      const role = roleRepository.create({
+        name: 'update_role',
+        permissions: ['perm1', 'perm2'],
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+      const savedRole = await roleRepository.save(role);
+
+      savedRole.permissions = ['perm1', 'perm2', 'perm3'];
+      const updatedRole = await roleRepository.save(savedRole);
+
+      expect(updatedRole.permissions).toHaveLength(3);
+      expect(updatedRole.permissions).toContain('perm3');
+    });
+  });
+
+  describe('Standard Roles', () => {
+    it('should create agent role with appropriate permissions', async () => {
+      const agentRole = roleRepository.create({
+        name: 'agent',
+        description: 'Standard agent role',
+        permissions: [
+          'read:interactions:own',
+          'write:interactions:own',
+          'read:tickets:own',
+          'write:tickets:own',
+          'read:customers:all',
+          'write:notes:own',
+        ],
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      const savedRole = await roleRepository.save(agentRole);
+
+      expect(savedRole.name).toBe('agent');
+      expect(savedRole.permissions.length).toBeGreaterThan(0);
+    });
+
+    it('should create supervisor role with elevated permissions', async () => {
+      const supervisorRole = roleRepository.create({
+        name: 'supervisor',
+        description: 'Supervisor role',
+        permissions: [
+          'read:interactions:team',
+          'write:interactions:team',
+          'manage:agents:team',
+          'read:reports:team',
+        ],
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      const savedRole = await roleRepository.save(supervisorRole);
+
+      expect(savedRole.name).toBe('supervisor');
+      expect(savedRole.permissions).toContain('manage:agents:team');
+    });
+  });
+});

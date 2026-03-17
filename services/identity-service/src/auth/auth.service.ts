@@ -31,7 +31,7 @@ export class AuthService {
     });
 
     // Log attempt
-    await this.logLoginAttempt(user?.id, loginDto.username, ip, userAgent, false, 'Invalid credentials');
+    await this.logLoginAttempt(user?.id || null, loginDto.username, ip, userAgent, false, 'Invalid credentials');
 
     if (!user) {
       throw new Error('Invalid credentials');
@@ -65,7 +65,7 @@ export class AuthService {
     await this.userRepository.save(user);
 
     // Log successful attempt
-    await this.logLoginAttempt(user.id, user.username, ip, userAgent, true, null);
+    await this.logLoginAttempt(user.id, user.username, ip, userAgent, true, undefined);
 
     // Check MFA
     if (user.mfaEnabled) {
@@ -181,15 +181,15 @@ export class AuthService {
   }
 
   private async logLoginAttempt(
-    userId: string,
+    userId: string | null,
     username: string,
     ip: string,
     userAgent: string,
     success: boolean,
-    failureReason: string,
+    failureReason?: string,
   ) {
     await this.loginAttemptRepository.save({
-      userId,
+      userId: userId || undefined,
       username,
       ipAddress: ip,
       userAgent,

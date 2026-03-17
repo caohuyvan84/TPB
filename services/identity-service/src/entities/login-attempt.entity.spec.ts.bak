@@ -1,0 +1,240 @@
+import { DataSource, Repository } from 'typeorm';
+import { LoginAttempt } from './login-attempt.entity';
+import { User } from './user.entity';
+import { createTestDataSource } from './test-data-source';
+
+describe('LoginAttempt Entity', () => {
+  let dataSource: DataSource;
+  let attemptRepository: Repository<LoginAttempt>;
+  let userRepository: Repository<User>;
+
+  beforeAll(async () => {
+    dataSource = await createTestDataSource();
+    attemptRepository = dataSource.getRepository(LoginAttempt);
+    userRepository = dataSource.getRepository(User);
+  });
+
+  afterAll(async () => {
+    await dataSource.destroy();
+  });
+
+  beforeEach(async () => {
+    await attemptRepository.query('TRUNCATE TABLE login_attempts RESTART IDENTITY CASCADE');
+    await userRepository.query('TRUNCATE TABLE users RESTART IDENTITY CASCADE');
+  });
+
+  describe('Entity Creation', () => {
+    it('should create a successful login attempt', async () => {
+      const user = await userRepository.save({
+        username: 'loginuser',
+        email: 'login@example.com',
+        fullName: 'Login User',
+        passwordHash: '$2b$12$hash',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      const attempt = attemptRepository.create({
+        userId: user.id,
+        username: 'loginuser',
+        ipAddress: '192.168.1.1',
+        userAgent: 'Mozilla/5.0',
+        success: true,
+      });
+
+      const savedAttempt = await attemptRepository.save(attempt);
+
+      expect(savedAttempt.id).toBeDefined();
+      expect(savedAttempt.userId).toBe(user.id);
+      expect(savedAttempt.username).toBe('loginuser');
+      expect(savedAttempt.success).toBe(true);
+      expect(savedAttempt.failureReason).toBeNull();
+      expect(savedAttempt.attemptedAt).toBeInstanceOf(Date);
+    });
+
+    it('should create a failed login attempt with reason', async () => {
+      const attempt = attemptRepository.create({
+        username: 'nonexistent',
+        ipAddress: '192.168.1.1',
+        userAgent: 'Mozilla/5.0',
+        success: false,
+        failureReason: 'Invalid credentials',
+      });
+
+      const savedAttempt = await attemptRepository.save(attempt);
+
+      expect(savedAttempt.success).toBe(false);
+      expect(savedAttempt.failureReason).toBe('Invalid credentials');
+      expect(savedAttempt.userId).toBeNull();
+    });
+  });
+
+  describe('Relationships', () => {
+    it('should have optional many-to-one relationship with user', async () => {
+      const user = await userRepository.save({
+        username: 'reluser',
+        email: 'rel@example.com',
+        fullName: 'Rel User',
+        passwordHash: '$2b$12$hash',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      const attempt = await attemptRepository.save({
+        userId: user.id,
+        username: 'reluser',
+        success: true,
+      });
+
+      const foundAttempt = await attemptRepository.findOne({
+        where: { id: attempt.id },
+        relations: ['user'],
+      });
+
+      expect(foundAttempt?.user).toBeDefined();
+      expect(foundAttempt?.user?.username).toBe('reluser');
+    });
+
+    it('should allow login attempts without user reference', async () => {
+      const attempt = await attemptRepository.save({
+        username: 'unknown',
+        success: false,
+        failureReason: 'User not found',
+      });
+
+      expect(attempt.userId).toBeNull();
+      expect(attempt.username).toBe('unknown');
+    });
+  });
+
+  describe('Audit Trail', () => {
+    it('should track multiple failed attempts', async () => {
+      const user = await userRepository.save({
+        username: 'failuser',
+        email: 'fail@example.com',
+        fullName: 'Fail User',
+        passwordHash: '$2b$12$hash',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      await attemptRepository.save([
+        {
+          userId: user.id,
+          username: 'failuser',
+          success: false,
+          failureReason: 'Invalid password',
+          ipAddress: '192.168.1.1',
+        },
+        {
+          userId: user.id,
+          username: 'failuser',
+          success: false,
+          failureReason: 'Invalid password',
+          ipAddress: '192.168.1.1',
+        },
+        {
+          userId: user.id,
+          username: 'failuser',
+          success: false,
+          failureReason: 'Invalid password',
+          ipAddress: '192.168.1.1',
+        },
+      ]);
+
+      const attempts = await attemptRepository.find({
+        where: { userId: user.id, success: false },
+      });
+
+      expect(attempts).toHaveLength(3);
+    });
+
+    it('should store IP address for security tracking', async () => {
+      const attempt = await attemptRepository.save({
+        username: 'securityuser',
+        success: false,
+        failureReason: 'Account locked',
+        ipAddress: '10.0.0.1',
+      });
+
+      expect(attempt.ipAddress).toBe('10.0.0.1');
+    });
+
+    it('should store user agent for device tracking', async () => {
+      const attempt = await attemptRepository.save({
+        username: 'deviceuser',
+        success: true,
+        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)',
+      });
+
+      expect(attempt.userAgent).toContain('iPhone');
+    });
+  });
+
+  describe('Failure Reasons', () => {
+    it('should track invalid credentials', async () => {
+      const attempt = await attemptRepository.save({
+        username: 'wrongpass',
+        success: false,
+        failureReason: 'Invalid credentials',
+      });
+
+      expect(attempt.failureReason).toBe('Invalid credentials');
+    });
+
+    it('should track account locked', async () => {
+      const user = await userRepository.save({
+        username: 'lockeduser',
+        email: 'locked@example.com',
+        fullName: 'Locked User',
+        passwordHash: '$2b$12$hash',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+        failedLoginAttempts: 5,
+        lockedUntil: new Date(Date.now() + 15 * 60 * 1000),
+      });
+
+      const attempt = await attemptRepository.save({
+        userId: user.id,
+        username: 'lockeduser',
+        success: false,
+        failureReason: 'Account locked',
+      });
+
+      expect(attempt.failureReason).toBe('Account locked');
+    });
+
+    it('should track MFA failure', async () => {
+      const user = await userRepository.save({
+        username: 'mfauser',
+        email: 'mfa@example.com',
+        fullName: 'MFA User',
+        passwordHash: '$2b$12$hash',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+        mfaEnabled: true,
+      });
+
+      const attempt = await attemptRepository.save({
+        userId: user.id,
+        username: 'mfauser',
+        success: false,
+        failureReason: 'Invalid MFA code',
+      });
+
+      expect(attempt.failureReason).toBe('Invalid MFA code');
+    });
+  });
+
+  describe('Timestamp Tracking', () => {
+    it('should automatically set attemptedAt timestamp', async () => {
+      const before = new Date();
+      
+      const attempt = await attemptRepository.save({
+        username: 'timeuser',
+        success: true,
+      });
+
+      const after = new Date();
+
+      expect(attempt.attemptedAt).toBeInstanceOf(Date);
+      expect(attempt.attemptedAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
+      expect(attempt.attemptedAt.getTime()).toBeLessThanOrEqual(after.getTime());
+    });
+  });
+});

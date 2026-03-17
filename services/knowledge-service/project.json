@@ -59,6 +59,13 @@
           "buildTarget": "knowledge-service:build:production"
         }
       }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": {
+        "jestConfig": "services/knowledge-service/jest.config.ts"
+      }
     }
   },
   "tags": []

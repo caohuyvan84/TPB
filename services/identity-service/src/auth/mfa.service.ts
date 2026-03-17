@@ -12,8 +12,8 @@ export class MfaService {
     });
 
     return {
-      secret: secret.base32,
-      qrCode: secret.otpauth_url,
+      secret: secret.base32 || '',
+      qrCode: secret.otpauth_url || '',
     };
   }
 

@@ -1,0 +1,421 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { AuthService } from './auth.service';
+import { User, RefreshToken, LoginAttempt } from '../entities';
+import { PasswordService } from './password.service';
+import { TokenService } from './token.service';
+import { MfaService } from './mfa.service';
+import { RedisService } from '../common/redis.service';
+
+describe('AuthService', () => {
+  let service: AuthService;
+  let userRepository: jest.Mocked<Repository<User>>;
+  let refreshTokenRepository: jest.Mocked<Repository<RefreshToken>>;
+  let loginAttemptRepository: jest.Mocked<Repository<LoginAttempt>>;
+  let passwordService: jest.Mocked<PasswordService>;
+  let tokenService: jest.Mocked<TokenService>;
+  let mfaService: jest.Mocked<MfaService>;
+  let redisService: jest.Mocked<RedisService>;
+
+  const mockUser = {
+    id: '123e4567-e89b-12d3-a456-426614174000',
+    username: 'testuser',
+    email: 'test@example.com',
+    passwordHash: '$2b$12$hashed_password',
+    fullName: 'Test User',
+    agentId: 'AGT001',
+    isActive: true,
+    mfaEnabled: false,
+    mfaSecret: null,
+    failedLoginAttempts: 0,
+    lockedUntil: null,
+    tenantId: 'tenant-123',
+    roles: [{ 
+      id: 'role-1',
+      name: 'agent', 
+      permissions: ['read:interactions:own', 'write:tickets:own'],
+      tenantId: 'tenant-123',
+    }],
+  };
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AuthService,
+        {
+          provide: getRepositoryToken(User),
+          useValue: {
+            findOne: jest.fn(),
+            save: jest.fn(),
+            create: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(RefreshToken),
+          useValue: {
+            create: jest.fn(),
+            save: jest.fn(),
+            findOne: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(LoginAttempt),
+          useValue: {
+            create: jest.fn(),
+            save: jest.fn(),
+          },
+        },
+        {
+          provide: PasswordService,
+          useValue: {
+            compare: jest.fn(),
+            hash: jest.fn(),
+          },
+        },
+        {
+          provide: TokenService,
+          useValue: {
+            generateAccessToken: jest.fn(),
+            generateRefreshToken: jest.fn(),
+            verifyRefreshToken: jest.fn(),
+            verifyAccessToken: jest.fn(),
+          },
+        },
+        {
+          provide: MfaService,
+          useValue: {
+            generateSecret: jest.fn(),
+            verifyToken: jest.fn(),
+            generateToken: jest.fn(),
+          },
+        },
+        {
+          provide: RedisService,
+          useValue: {
+            set: jest.fn(),
+            get: jest.fn(),
+            del: jest.fn(),
+            setex: jest.fn(),
+          },
+        },
+      ],
+    }).compile();
+
+    service = module.get<AuthService>(AuthService);
+    userRepository = module.get(getRepositoryToken(User));
+    refreshTokenRepository = module.get(getRepositoryToken(RefreshToken));
+    loginAttemptRepository = module.get(getRepositoryToken(LoginAttempt));
+    passwordService = module.get(PasswordService);
+    tokenService = module.get(TokenService);
+    mfaService = module.get(MfaService);
+    redisService = module.get(RedisService);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+
+  describe('login', () => {
+    const loginDto = { username: 'testuser', password: 'Password123!' };
+    const ipAddress = '192.168.1.1';
+    const userAgent = 'Mozilla/5.0';
+
+    it('should throw error if user not found', async () => {
+      userRepository.findOne.mockResolvedValue(null);
+      loginAttemptRepository.create.mockReturnValue({} as any);
+      loginAttemptRepository.save.mockResolvedValue({} as any);
+
+      await expect(
+        service.login(loginDto, ipAddress, userAgent),
+      ).rejects.toThrow('Invalid credentials');
+
+      expect(userRepository.findOne).toHaveBeenCalledWith({
+        where: { username: loginDto.username },
+        relations: ['roles'],
+      });
+    });
+
+    it('should throw error if user is inactive', async () => {
+      const inactiveUser = { ...mockUser, isActive: false };
+      userRepository.findOne.mockResolvedValue(inactiveUser as any);
+      loginAttemptRepository.create.mockReturnValue({} as any);
+      loginAttemptRepository.save.mockResolvedValue({} as any);
+
+      await expect(
+        service.login(loginDto, ipAddress, userAgent),
+      ).rejects.toThrow();
+    });
+
+    it('should throw error if account is locked', async () => {
+      const lockedUser = { 
+        ...mockUser, 
+        lockedUntil: new Date(Date.now() + 15 * 60 * 1000),
+        failedLoginAttempts: 5,
+      };
+      userRepository.findOne.mockResolvedValue(lockedUser as any);
+      loginAttemptRepository.create.mockReturnValue({} as any);
+      loginAttemptRepository.save.mockResolvedValue({} as any);
+
+      await expect(
+        service.login(loginDto, ipAddress, userAgent),
+      ).rejects.toThrow('Account is locked');
+    });
+
+    it('should throw error if password is invalid', async () => {
+      userRepository.findOne.mockResolvedValue(mockUser as any);
+      passwordService.compare.mockResolvedValue(false);
+      userRepository.save.mockResolvedValue({ ...mockUser, failedLoginAttempts: 1 } as any);
+      loginAttemptRepository.create.mockReturnValue({} as any);
+      loginAttemptRepository.save.mockResolvedValue({} as any);
+
+      await expect(
+        service.login(loginDto, ipAddress, userAgent),
+      ).rejects.toThrow('Invalid credentials');
+
+      expect(passwordService.compare).toHaveBeenCalledWith(
+        loginDto.password,
+        mockUser.passwordHash,
+      );
+      expect(userRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ failedLoginAttempts: 1 }),
+      );
+    });
+
+    it('should lock account after 5 failed attempts', async () => {
+      const userWith4Fails = { ...mockUser, failedLoginAttempts: 4 };
+      userRepository.findOne.mockResolvedValue(userWith4Fails as any);
+      passwordService.compare.mockResolvedValue(false);
+      userRepository.save.mockResolvedValue({} as any);
+      loginAttemptRepository.create.mockReturnValue({} as any);
+      loginAttemptRepository.save.mockResolvedValue({} as any);
+
+      await expect(
+        service.login(loginDto, ipAddress, userAgent),
+      ).rejects.toThrow('Invalid credentials');
+
+      expect(userRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          failedLoginAttempts: 5,
+          lockedUntil: expect.any(Date),
+        }),
+      );
+    });
+
+    it('should return partial token if MFA is enabled', async () => {
+      const mfaUser = { ...mockUser, mfaEnabled: true, mfaSecret: 'SECRET' };
+      userRepository.findOne.mockResolvedValue(mfaUser as any);
+      passwordService.compare.mockResolvedValue(true);
+      userRepository.save.mockResolvedValue(mfaUser as any);
+      tokenService.generateAccessToken.mockReturnValue('partial_token');
+      loginAttemptRepository.create.mockReturnValue({} as any);
+      loginAttemptRepository.save.mockResolvedValue({} as any);
+
+      const result = await service.login(loginDto, ipAddress, userAgent);
+
+      expect(result).toEqual({
+        requiresMfa: true,
+        mfaToken: 'partial_token',
+      });
+      expect(tokenService.generateAccessToken).toHaveBeenCalled();
+    });
+
+    it('should return tokens on successful login without MFA', async () => {
+      userRepository.findOne.mockResolvedValue(mockUser as any);
+      passwordService.compare.mockResolvedValue(true);
+      userRepository.save.mockResolvedValue({ ...mockUser, failedLoginAttempts: 0 } as any);
+      tokenService.generateAccessToken.mockReturnValue('access_token');
+      tokenService.generateRefreshToken.mockReturnValue('refresh_token');
+      refreshTokenRepository.save.mockResolvedValue({} as any);
+      redisService.setex.mockResolvedValue(undefined);
+      loginAttemptRepository.create.mockReturnValue({} as any);
+      loginAttemptRepository.save.mockResolvedValue({} as any);
+
+      const result = await service.login(loginDto, ipAddress, userAgent);
+
+      expect(result).toEqual({
+        accessToken: 'access_token',
+        refreshToken: 'refresh_token',
+        expiresIn: 900,
+        tokenType: 'Bearer',
+        user: expect.objectContaining({
+          id: mockUser.id,
+          agentId: mockUser.agentId,
+        }),
+      });
+      expect(userRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ failedLoginAttempts: 0 }),
+      );
+    });
+
+    it('should reset failed attempts on successful login', async () => {
+      const userWithFailedAttempts = { ...mockUser, failedLoginAttempts: 3 };
+      userRepository.findOne.mockResolvedValue(userWithFailedAttempts as any);
+      passwordService.compare.mockResolvedValue(true);
+      userRepository.save.mockResolvedValue({ ...mockUser, failedLoginAttempts: 0 } as any);
+      tokenService.generateAccessToken.mockReturnValue('access_token');
+      tokenService.generateRefreshToken.mockReturnValue('refresh_token');
+      refreshTokenRepository.save.mockResolvedValue({} as any);
+      redisService.setex.mockResolvedValue(undefined);
+      loginAttemptRepository.create.mockReturnValue({} as any);
+      loginAttemptRepository.save.mockResolvedValue({} as any);
+
+      await service.login(loginDto, ipAddress, userAgent);
+
+      expect(userRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ failedLoginAttempts: 0, lockedUntil: undefined }),
+      );
+    });
+  });
+
+  describe('verifyMfa', () => {
+    const mfaToken = 'partial_token';
+    const code = '123456';
+    const ipAddress = '192.168.1.1';
+    const userAgent = 'Mozilla/5.0';
+
+    it('should throw error if user not found', async () => {
+      tokenService.verifyAccessToken = jest.fn().mockReturnValue({ sub: 'user-id' });
+      userRepository.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.verifyMfa(mfaToken, code, ipAddress, userAgent),
+      ).rejects.toThrow('Invalid MFA setup');
+    });
+
+    it('should throw error if MFA code is invalid', async () => {
+      tokenService.verifyAccessToken = jest.fn().mockReturnValue({ sub: mockUser.id });
+      userRepository.findOne.mockResolvedValue({ ...mockUser, mfaEnabled: true, mfaSecret: 'SECRET' } as any);
+      mfaService.verifyToken.mockReturnValue(false);
+
+      await expect(
+        service.verifyMfa(mfaToken, code, ipAddress, userAgent),
+      ).rejects.toThrow('Invalid MFA code');
+    });
+
+    it('should return tokens on successful MFA verification', async () => {
+      tokenService.verifyAccessToken = jest.fn().mockReturnValue({ sub: mockUser.id });
+      userRepository.findOne.mockResolvedValue({ ...mockUser, mfaEnabled: true, mfaSecret: 'SECRET' } as any);
+      mfaService.verifyToken.mockReturnValue(true);
+      tokenService.generateAccessToken.mockReturnValue('access_token');
+      tokenService.generateRefreshToken.mockReturnValue('refresh_token');
+      refreshTokenRepository.save.mockResolvedValue({} as any);
+      redisService.setex.mockResolvedValue(undefined);
+
+      const result = await service.verifyMfa(mfaToken, code, ipAddress, userAgent);
+
+      expect(result).toEqual({
+        accessToken: 'access_token',
+        refreshToken: 'refresh_token',
+        expiresIn: 900,
+        tokenType: 'Bearer',
+        user: expect.any(Object),
+      });
+    });
+
+    it('should enable MFA if not already enabled', async () => {
+      const userWithoutMfa = { ...mockUser, mfaEnabled: false, mfaSecret: 'SECRET' };
+      tokenService.verifyAccessToken = jest.fn().mockReturnValue({ sub: mockUser.id });
+      userRepository.findOne.mockResolvedValue(userWithoutMfa as any);
+      userRepository.save.mockResolvedValue({ ...userWithoutMfa, mfaEnabled: true } as any);
+      mfaService.verifyToken.mockReturnValue(true);
+      tokenService.generateAccessToken.mockReturnValue('access_token');
+      tokenService.generateRefreshToken.mockReturnValue('refresh_token');
+      refreshTokenRepository.save.mockResolvedValue({} as any);
+      redisService.setex.mockResolvedValue(undefined);
+
+      await service.verifyMfa(mfaToken, code, ipAddress, userAgent);
+
+      expect(userRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ mfaEnabled: true }),
+      );
+    });
+  });
+
+  describe('refreshTokens', () => {
+    const refreshToken = 'old_refresh_token';
+    const ipAddress = '192.168.1.1';
+    const userAgent = 'Mozilla/5.0';
+
+    it('should throw error if token is blacklisted', async () => {
+      redisService.exists = jest.fn().mockResolvedValue(true);
+
+      await expect(
+        service.refreshTokens(refreshToken, ipAddress, userAgent),
+      ).rejects.toThrow('Token has been revoked');
+    });
+
+    it('should throw error if token not found in database', async () => {
+      redisService.exists = jest.fn().mockResolvedValue(false);
+      refreshTokenRepository.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.refreshTokens(refreshToken, ipAddress, userAgent),
+      ).rejects.toThrow('Invalid refresh token');
+    });
+
+    it('should throw error if token is expired', async () => {
+      const expiredToken = {
+        revoked: false,
+        userId: mockUser.id,
+        expiresAt: new Date(Date.now() - 1000),
+        user: mockUser,
+      };
+      redisService.exists = jest.fn().mockResolvedValue(false);
+      refreshTokenRepository.findOne.mockResolvedValue(expiredToken as any);
+
+      await expect(
+        service.refreshTokens(refreshToken, ipAddress, userAgent),
+      ).rejects.toThrow('Invalid refresh token');
+    });
+
+    it('should return new tokens and revoke old token', async () => {
+      const validToken = {
+        id: 'token-id',
+        revoked: false,
+        userId: mockUser.id,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        user: mockUser,
+      };
+      redisService.exists = jest.fn().mockResolvedValue(false);
+      refreshTokenRepository.findOne.mockResolvedValue(validToken as any);
+      refreshTokenRepository.save.mockResolvedValue({ ...validToken, revoked: true } as any);
+      tokenService.generateAccessToken.mockReturnValue('new_access_token');
+      tokenService.generateRefreshToken.mockReturnValue('new_refresh_token');
+      refreshTokenRepository.save.mockResolvedValue({} as any);
+      redisService.setex.mockResolvedValue(undefined);
+
+      const result = await service.refreshTokens(refreshToken, ipAddress, userAgent);
+
+      expect(result).toEqual({
+        accessToken: 'new_access_token',
+        refreshToken: 'new_refresh_token',
+        expiresIn: 900,
+        tokenType: 'Bearer',
+        user: expect.any(Object),
+      });
+      expect(refreshTokenRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ revoked: true }),
+      );
+    });
+  });
+
+  describe('logout', () => {
+    const refreshToken = 'refresh_token';
+
+    it('should revoke refresh token and add to blacklist', async () => {
+      refreshTokenRepository.update = jest.fn().mockResolvedValue({});
+      redisService.setex.mockResolvedValue(undefined);
+
+      await service.logout(refreshToken);
+
+      expect(refreshTokenRepository.update).toHaveBeenCalled();
+      expect(redisService.setex).toHaveBeenCalled();
+    });
+  });
+});

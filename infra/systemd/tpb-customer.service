@@ -1,0 +1,18 @@
+[Unit]
+Description=TPB Customer Service
+After=network.target postgresql.service redis.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/project/AgentdesktopTPB
+Environment="NODE_ENV=production"
+Environment="PORT=3005"
+ExecStart=/usr/bin/npx nx run customer-service:serve
+Restart=always
+RestartSec=10
+StandardOutput=append:/opt/project/AgentdesktopTPB/logs/customer-service.log
+StandardError=append:/opt/project/AgentdesktopTPB/logs/customer-service.log
+
+[Install]
+WantedBy=multi-user.target

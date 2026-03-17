@@ -59,6 +59,13 @@
           "buildTarget": "ai-service:build:production"
         }
       }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": {
+        "jestConfig": "services/ai-service/jest.config.ts"
+      }
     }
   },
   "tags": []

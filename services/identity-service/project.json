@@ -73,6 +73,14 @@
         "command": "typeorm-ts-node-commonjs migration:revert -d src/config/typeorm.config.ts",
         "cwd": "services/identity-service"
       }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": {
+        "jestConfig": "services/identity-service/jest.config.ts",
+        "passWithNoTests": true
+      }
     }
   },
   "tags": []

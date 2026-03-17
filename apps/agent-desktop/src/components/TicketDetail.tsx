@@ -1,121 +1,69 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Separator } from './ui/separator';
+import { Card, CardContent } from './ui/card';
 import { Label } from './ui/label';
-import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { ScrollArea } from './ui/scroll-area';
-import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { Avatar, AvatarFallback } from './ui/avatar';
 import { Textarea } from './ui/textarea';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { 
+import { TooltipProvider } from './ui/tooltip';
+import { useTicket, useTicketComments, useTicketHistory, useUpdateTicket, useAddTicketComment } from '../hooks/useTickets';
+import {
   Ticket,
   Clock,
-  User,
   Mail,
   Phone,
-  Calendar,
   AlertTriangle,
   CheckCircle,
   MessageSquare,
-  Paperclip,
   Send,
   Edit,
   Save,
   X,
-  ArrowLeft,
-  MoreHorizontal,
   Flag,
-  Users,
   Tag,
   History,
   Timer,
-  FileText,
-  Star
+  Loader2
 } from "lucide-react";
 
-interface TicketData {
-  id: string;
-  number: string;
-  classification?: string;
-  classificationLabel?: string;
-  title: string;
-  titleLabel?: string;
-  description: string;
-  status: 'new' | 'in-progress' | 'pending' | 'resolved' | 'closed';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  customer: {
-    name: string;
-    email: string;
-    phone?: string;
-    avatar?: string;
-    isVIP?: boolean;
-  };
-  assignedAgent?: string;
-  assignedBy?: string;
-  createdAt: Date;
-  updatedAt: Date;
-  dueDate?: Date;
-  resolvedAt?: Date;
-  tags: string[];
-  attachments?: string[];
-  interactionId?: string;
-  source?: string;
-  comments: Array<{
-    id: string;
-    author: string;
-    content: string;
-    timestamp: Date;
-    type: 'comment' | 'status-change' | 'assignment';
-    isInternal?: boolean;
-  }>;
-}
-
 interface TicketDetailProps {
-  ticket: TicketData | null;
+  ticketId: string | null;
   onClose?: () => void;
-  onUpdateTicket?: (ticketId: string, updates: Partial<TicketData>) => void;
-  onAddComment?: (ticketId: string, comment: string, isInternal?: boolean) => void;
 }
 
-export function TicketDetail({ 
-  ticket, 
-  onClose, 
-  onUpdateTicket, 
-  onAddComment 
-}: TicketDetailProps) {
+export function TicketDetail({ ticketId, onClose }: TicketDetailProps) {
+  const { data: ticket, isLoading } = useTicket(ticketId);
+  const { data: comments = [] } = useTicketComments(ticketId);
+  const { data: history = [] } = useTicketHistory(ticketId);
+  const updateTicket = useUpdateTicket();
+  const addComment = useAddTicketComment();
+
   const [isEditing, setIsEditing] = useState(false);
-  const [editableTitle, setEditableTitle] = useState(ticket?.title || '');
-  const [editableDescription, setEditableDescription] = useState(ticket?.description || '');
-  const [editableClassification, setEditableClassification] = useState(ticket?.classification || '');
-  const [editablePriority, setEditablePriority] = useState(ticket?.priority || 'medium');
-  const [editableStatus, setEditableStatus] = useState(ticket?.status || 'new');
-  const [editableDueDate, setEditableDueDate] = useState(
-    ticket?.dueDate ? new Date(ticket.dueDate).toISOString().split('T')[0] : ''
-  );
-  const [editableAssignedAgent, setEditableAssignedAgent] = useState(ticket?.assignedAgent || '');
+  const [editableTitle, setEditableTitle] = useState('');
+  const [editableDescription, setEditableDescription] = useState('');
+  const [editablePriority, setEditablePriority] = useState('medium');
+  const [editableStatus, setEditableStatus] = useState('open');
   const [newComment, setNewComment] = useState('');
   const [isInternalComment, setIsInternalComment] = useState(false);
 
-  // Available options for dropdowns
-  const categories = [
-    'Technical Support',
-    'Account Management',
-    'Billing & Payment',
-    'Customer Complaint',
-    'General Inquiry',
-    'Product Request'
-  ];
+  useEffect(() => {
+    if (ticket) {
+      setEditableTitle(ticket.title || '');
+      setEditableDescription(ticket.description || '');
+      setEditablePriority(ticket.priority || 'medium');
+      setEditableStatus(ticket.status || 'open');
+    }
+  }, [ticket]);
 
-  const agents = [
-    'Agent Mai',
-    'Agent Duc',
-    'Agent Linh',
-    'Agent Tung',
-    'Agent Hoa'
-  ];
+  if (isLoading) {
+    return (
+      <div className="h-full flex items-center justify-center text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
 
   if (!ticket) {
     return (
@@ -128,9 +76,9 @@ export function TicketDetail({
     );
   }
 
-  const getStatusColor = (status: TicketData['status']) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case 'new': return 'bg-blue-100 text-blue-800';
+      case 'new': case 'open': return 'bg-blue-100 text-blue-800';
       case 'in-progress': return 'bg-yellow-100 text-yellow-800';
       case 'pending': return 'bg-orange-100 text-orange-800';
       case 'resolved': return 'bg-green-100 text-green-800';
@@ -139,7 +87,18 @@ export function TicketDetail({
     }
   };
 
-  const getPriorityColor = (priority: TicketData['priority']) => {
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'new': case 'open': return 'Mới';
+      case 'in-progress': return 'Đang xử lý';
+      case 'pending': return 'Chờ phản hồi';
+      case 'resolved': return 'Đã giải quyết';
+      case 'closed': return 'Đã đóng';
+      default: return status;
+    }
+  };
+
+  const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'urgent': return 'bg-red-100 text-red-800';
       case 'high': return 'bg-orange-100 text-orange-800';
@@ -149,7 +108,17 @@ export function TicketDetail({
     }
   };
 
-  const getPriorityIcon = (priority: TicketData['priority']) => {
+  const getPriorityLabel = (priority: string) => {
+    switch (priority) {
+      case 'urgent': return 'Khẩn cấp';
+      case 'high': return 'Cao';
+      case 'medium': return 'Trung bình';
+      case 'low': return 'Thấp';
+      default: return priority;
+    }
+  };
+
+  const getPriorityIcon = (priority: string) => {
     switch (priority) {
       case 'urgent': return <AlertTriangle className="h-3 w-3" />;
       case 'high': return <Flag className="h-3 w-3" />;
@@ -157,7 +126,7 @@ export function TicketDetail({
     }
   };
 
-  const getStatusIcon = (status: TicketData['status']) => {
+  const getStatusIcon = (status: string) => {
     switch (status) {
       case 'resolved': return <CheckCircle className="h-3 w-3" />;
       case 'in-progress': return <Timer className="h-3 w-3" />;
@@ -165,19 +134,17 @@ export function TicketDetail({
     }
   };
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit', 
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+  const formatTime = (dateStr: string | undefined) => {
+    if (!dateStr) return 'Chưa đặt';
+    return new Date(dateStr).toLocaleString('vi-VN', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
     });
   };
 
-  const formatRelativeTime = (date: Date) => {
+  const formatRelativeTime = (dateStr: string) => {
     const now = new Date();
-    const diff = now.getTime() - date.getTime();
+    const diff = now.getTime() - new Date(dateStr).getTime();
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
@@ -188,43 +155,58 @@ export function TicketDetail({
     return 'Vừa xong';
   };
 
-  const handleSaveEdit = () => {
-    if (onUpdateTicket) {
-      onUpdateTicket(ticket.id, {
-        title: editableTitle,
-        description: editableDescription,
-        classification: editableClassification,
-        priority: editablePriority as TicketData['priority'],
-        status: editableStatus as TicketData['status'],
-        dueDate: editableDueDate ? new Date(editableDueDate) : undefined,
-        assignedAgent: editableAssignedAgent
+  const handleSaveEdit = async () => {
+    if (!ticket) return;
+    try {
+      await updateTicket.mutateAsync({
+        id: ticket.id,
+        data: {
+          title: editableTitle,
+          description: editableDescription,
+          priority: editablePriority,
+          status: editableStatus,
+        }
       });
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Failed to update ticket:', error);
     }
-    setIsEditing(false);
   };
 
   const handleCancelEdit = () => {
-    setEditableTitle(ticket.title);
-    setEditableDescription(ticket.description);
-    setEditableClassification(ticket.classification || '');
-    setEditablePriority(ticket.priority);
-    setEditableStatus(ticket.status);
-    setEditableDueDate(ticket.dueDate ? new Date(ticket.dueDate).toISOString().split('T')[0] : '');
-    setEditableAssignedAgent(ticket.assignedAgent || '');
+    if (ticket) {
+      setEditableTitle(ticket.title);
+      setEditableDescription(ticket.description || '');
+      setEditablePriority(ticket.priority);
+      setEditableStatus(ticket.status);
+    }
     setIsEditing(false);
   };
 
-  const handleAddComment = () => {
-    if (newComment.trim() && onAddComment) {
-      onAddComment(ticket.id, newComment.trim(), isInternalComment);
+  const handleAddComment = async () => {
+    if (!ticket || !newComment.trim()) return;
+    try {
+      await addComment.mutateAsync({
+        id: ticket.id,
+        content: newComment.trim(),
+        isInternal: isInternalComment
+      });
       setNewComment('');
       setIsInternalComment(false);
+    } catch (error) {
+      console.error('Failed to add comment:', error);
     }
   };
 
-  const handleStatusChange = (newStatus: TicketData['status']) => {
-    if (onUpdateTicket) {
-      onUpdateTicket(ticket.id, { status: newStatus });
+  const handleStatusChange = async (newStatus: string) => {
+    if (!ticket) return;
+    try {
+      await updateTicket.mutateAsync({
+        id: ticket.id,
+        data: { status: newStatus }
+      });
+    } catch (error) {
+      console.error('Failed to update status:', error);
     }
   };
 
@@ -236,25 +218,19 @@ export function TicketDetail({
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center space-x-2">
               <Ticket className="h-4 w-4 text-blue-600" />
-              <span className="font-medium text-sm text-blue-600">#{ticket.number}</span>
+              <span className="font-medium text-sm text-blue-600">#{ticket.displayId}</span>
               <Badge className={getStatusColor(ticket.status)}>
                 {getStatusIcon(ticket.status)}
-                <span className="ml-1 text-xs">
-                  {ticket.status === 'new' ? 'Mới' :
-                   ticket.status === 'in-progress' ? 'Đang xử lý' :
-                   ticket.status === 'pending' ? 'Chờ phản hồi' :
-                   ticket.status === 'resolved' ? 'Đã giải quyết' : 'Đã đóng'}
-                </span>
+                <span className="ml-1 text-xs">{getStatusLabel(ticket.status)}</span>
               </Badge>
             </div>
-
             <div className="flex items-center space-x-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsEditing(!isEditing)}
-                className="h-7 w-7 p-0"
-              >
+              {onClose && (
+                <Button variant="ghost" size="sm" onClick={onClose} className="h-7 w-7 p-0">
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" onClick={() => setIsEditing(!isEditing)} className="h-7 w-7 p-0">
                 <Edit className="h-3 w-3" />
               </Button>
             </div>
@@ -278,7 +254,7 @@ export function TicketDetail({
                   placeholder="Mô tả chi tiết"
                 />
                 <div className="flex space-x-2">
-                  <Button size="sm" onClick={handleSaveEdit} className="h-7 text-xs">
+                  <Button size="sm" onClick={handleSaveEdit} disabled={updateTicket.isPending} className="h-7 text-xs">
                     <Save className="h-3 w-3 mr-1" />
                     Lưu
                   </Button>
@@ -290,92 +266,50 @@ export function TicketDetail({
               </div>
             ) : (
               <div>
-                <h3 className="text-sm font-medium text-foreground mb-1">
-                  {ticket.titleLabel || ticket.title}
-                </h3>
+                <h3 className="text-sm font-medium text-foreground mb-1">{ticket.title}</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">{ticket.description}</p>
               </div>
             )}
           </div>
 
-          {/* Priority, Classification and Status */}
+          {/* Priority and Category */}
           <div className="flex items-center flex-wrap gap-2 mt-3">
             <Badge className={getPriorityColor(ticket.priority)}>
               {getPriorityIcon(ticket.priority)}
-              <span className="ml-1 text-xs">
-                {ticket.priority === 'urgent' ? 'Khẩn cấp' :
-                 ticket.priority === 'high' ? 'Cao' :
-                 ticket.priority === 'medium' ? 'Trung bình' : 'Thấp'}
-              </span>
+              <span className="ml-1 text-xs">{getPriorityLabel(ticket.priority)}</span>
             </Badge>
-            {ticket.classificationLabel && (
+            {ticket.category && (
               <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-300">
                 <Tag className="h-3 w-3 mr-1" />
-                {ticket.classificationLabel}
+                {ticket.category}
               </Badge>
             )}
-            <Badge variant="outline" className={`text-xs ${
-              ticket.status === 'new' ? 'bg-muted/50 text-foreground/80 border-gray-300' :
-              ticket.status === 'in-progress' ? 'bg-blue-50 text-blue-700 border-blue-300' :
-              ticket.status === 'resolved' ? 'bg-green-50 text-green-700 border-green-300' :
-              'bg-muted text-muted-foreground border-gray-400'
-            }`}>
-              {ticket.status === 'new' ? 'Mới' :
-               ticket.status === 'in-progress' ? 'Đang xử lý' :
-               ticket.status === 'resolved' ? 'Đã xử lý' : 'Đóng'}
-            </Badge>
+            {ticket.department && (
+              <Badge variant="outline" className="text-xs">
+                {ticket.department}
+              </Badge>
+            )}
           </div>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-hidden flex flex-col">
-          {/* Customer Info - Compact */}
-          <div className="flex-shrink-0 border-b border-border p-3 bg-muted/50">
-            <div className="flex items-center space-x-3">
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={ticket.customer.avatar || undefined} />
-                <AvatarFallback className="text-xs">
-                  {ticket.customer.name.charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1">
-                <div className="flex items-center space-x-2">
-                  <span className="font-medium text-sm">{ticket.customer.name}</span>
-                  {ticket.customer.isVIP && (
-                    <Badge className="text-xs bg-yellow-100 text-yellow-800">VIP</Badge>
-                  )}
-                </div>
-                <div className="text-xs text-muted-foreground">{ticket.customer.email}</div>
-              </div>
-              <div className="flex space-x-1">
-                <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                  <Phone className="h-3 w-3" />
-                </Button>
-                <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                  <Mail className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-          </div>
-
           {/* Quick Actions */}
           <div className="flex-shrink-0 border-b border-border p-3 bg-muted/50">
             <div className="grid grid-cols-2 gap-2">
               <Button
-                variant="outline"
-                size="sm"
+                variant="outline" size="sm"
                 onClick={() => handleStatusChange('in-progress')}
-                disabled={ticket.status === 'in-progress'}
+                disabled={ticket.status === 'in-progress' || updateTicket.isPending}
                 className="h-7 text-xs"
               >
                 <Timer className="h-3 w-3 mr-1" />
                 Xử lý
               </Button>
               <Button
-                variant="outline"
-                size="sm"
+                variant="outline" size="sm"
                 onClick={() => handleStatusChange('resolved')}
-                disabled={ticket.status === 'resolved'}
+                disabled={ticket.status === 'resolved' || updateTicket.isPending}
                 className="h-7 text-xs bg-green-50 text-green-700 border-green-200"
               >
                 <CheckCircle className="h-3 w-3 mr-1" />
@@ -384,22 +318,18 @@ export function TicketDetail({
             </div>
           </div>
 
-          {/* Ticket Details - Expanded */}
+          {/* Ticket Details */}
           <div className="flex-shrink-0 border-b border-border p-3 bg-background">
             <div className="space-y-3">
               <h4 className="font-medium text-sm text-foreground">Thông tin ticket</h4>
-              
+
               {isEditing ? (
-                /* Edit Mode - Form Fields */
                 <div className="space-y-3">
-                  {/* Priority & Status */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label className="text-xs text-muted-foreground">Độ ưu tiên</Label>
-                      <Select value={editablePriority} onValueChange={(value) => setEditablePriority(value as 'low' | 'medium' | 'high' | 'urgent')}>
-                        <SelectTrigger className="h-8 text-xs mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
+                      <Select value={editablePriority} onValueChange={setEditablePriority}>
+                        <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="low" className="text-xs">Thấp</SelectItem>
                           <SelectItem value="medium" className="text-xs">Trung bình</SelectItem>
@@ -409,108 +339,49 @@ export function TicketDetail({
                       </Select>
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Trạng thái xử lý</Label>
-                      <Select value={editableStatus} onValueChange={(value) => setEditableStatus(value as 'new' | 'in-progress' | 'resolved' | 'pending' | 'closed')}>
-                        <SelectTrigger className="h-8 text-xs mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
+                      <Label className="text-xs text-muted-foreground">Trạng thái</Label>
+                      <Select value={editableStatus} onValueChange={setEditableStatus}>
+                        <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="new" className="text-xs">Mới</SelectItem>
+                          <SelectItem value="open" className="text-xs">Mới</SelectItem>
                           <SelectItem value="in-progress" className="text-xs">Đang xử lý</SelectItem>
-                          <SelectItem value="resolved" className="text-xs">Đã xử lý</SelectItem>
-                          <SelectItem value="closed" className="text-xs">Đóng</SelectItem>
+                          <SelectItem value="pending" className="text-xs">Chờ phản hồi</SelectItem>
+                          <SelectItem value="resolved" className="text-xs">Đã giải quyết</SelectItem>
+                          <SelectItem value="closed" className="text-xs">Đã đóng</SelectItem>
                         </SelectContent>
                       </Select>
-                    </div>
-                  </div>
-
-                  {/* Assigned Agent & Due Date */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Người xử lý</Label>
-                      <Select value={editableAssignedAgent} onValueChange={setEditableAssignedAgent}>
-                        <SelectTrigger className="h-8 text-xs mt-1">
-                          <SelectValue placeholder="Chọn agent" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {agents.map((agent) => (
-                            <SelectItem key={agent} value={agent} className="text-xs">
-                              {agent}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Hạn xử lý</Label>
-                      <Input
-                        type="date"
-                        value={editableDueDate}
-                        onChange={(e) => setEditableDueDate(e.target.value)}
-                        className="h-8 text-xs mt-1"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Read-only info */}
-                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Ngày tạo</Label>
-                      <p className="font-medium mt-0.5 text-xs text-muted-foreground">{formatTime(ticket.createdAt)}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Cập nhật</Label>
-                      <p className="font-medium mt-0.5 text-xs text-muted-foreground">{formatTime(ticket.updatedAt)}</p>
                     </div>
                   </div>
                 </div>
               ) : (
-                /* View Mode - Display Fields */
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div>
-                      <Label className="text-xs text-muted-foreground">Phân loại</Label>
-                      <p className="font-medium mt-0.5">{ticket.classificationLabel || 'Chưa phân loại'}</p>
+                      <Label className="text-xs text-muted-foreground">Danh mục</Label>
+                      <p className="font-medium mt-0.5">{ticket.category || 'Chưa phân loại'}</p>
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Tiêu đề</Label>
-                      <p className="font-medium mt-0.5">{ticket.titleLabel || ticket.title || 'Chưa có tiêu đề'}</p>
+                      <Label className="text-xs text-muted-foreground">Bộ phận</Label>
+                      <p className="font-medium mt-0.5">{ticket.department || 'Chưa phân công'}</p>
                     </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">Độ ưu tiên</Label>
                       <p className={`font-medium mt-0.5 ${
                         ticket.priority === 'urgent' ? 'text-red-600' :
                         ticket.priority === 'high' ? 'text-orange-600' :
-                        ticket.priority === 'medium' ? 'text-yellow-600' :
-                        'text-green-600'
-                      }`}>
-                        {ticket.priority === 'urgent' ? 'Khẩn cấp' :
-                         ticket.priority === 'high' ? 'Cao' :
-                         ticket.priority === 'medium' ? 'Trung bình' : 'Thấp'}
-                      </p>
+                        ticket.priority === 'medium' ? 'text-yellow-600' : 'text-green-600'
+                      }`}>{getPriorityLabel(ticket.priority)}</p>
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Trạng thái xử lý</Label>
+                      <Label className="text-xs text-muted-foreground">Trạng thái</Label>
                       <p className={`font-medium mt-0.5 ${
-                        ticket.status === 'new' ? 'text-muted-foreground' :
                         ticket.status === 'in-progress' ? 'text-blue-600' :
-                        ticket.status === 'resolved' ? 'text-green-600' :
-                        'text-muted-foreground'
-                      }`}>
-                        {ticket.status === 'new' ? 'Mới' :
-                         ticket.status === 'in-progress' ? 'Đang xử lý' :
-                         ticket.status === 'resolved' ? 'Đã xử lý' : 'Đóng'}
-                      </p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Người xử lý</Label>
-                      <p className="font-medium mt-0.5">{ticket.assignedAgent || 'Chưa phân công'}</p>
+                        ticket.status === 'resolved' ? 'text-green-600' : 'text-muted-foreground'
+                      }`}>{getStatusLabel(ticket.status)}</p>
                     </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">Hạn xử lý</Label>
-                      <p className="font-medium mt-0.5">
-                        {ticket.dueDate ? formatTime(ticket.dueDate) : 'Chưa đặt'}
-                      </p>
+                      <p className="font-medium mt-0.5">{formatTime(ticket.dueAt)}</p>
                     </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">Ngày tạo</Label>
@@ -520,30 +391,18 @@ export function TicketDetail({
                       <Label className="text-xs text-muted-foreground">Cập nhật</Label>
                       <p className="font-medium mt-0.5">{formatTime(ticket.updatedAt)}</p>
                     </div>
+                    {ticket.resolvedAt && (
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Giải quyết lúc</Label>
+                        <p className="font-medium mt-0.5 text-green-600">{formatTime(ticket.resolvedAt)}</p>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Interaction Link */}
                   {ticket.interactionId && (
                     <div className="pt-2 border-t border-border/50">
                       <Label className="text-xs text-muted-foreground">Từ tương tác</Label>
-                      <p className="font-medium mt-0.5 text-blue-600 text-xs">
-                        {ticket.interactionId} {ticket.source ? `- ${ticket.source}` : ''}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Tags */}
-                  {ticket.tags && ticket.tags.length > 0 && (
-                    <div className="pt-2 border-t border-border/50">
-                      <Label className="text-xs text-muted-foreground mb-2 block">Tags</Label>
-                      <div className="flex flex-wrap gap-1">
-                        {ticket.tags.map((tag: string, index: number) => (
-                          <Badge key={index} variant="outline" className="text-xs">
-                            <Tag className="h-2 w-2 mr-1" />
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
+                      <p className="font-medium mt-0.5 text-blue-600 text-xs">{ticket.interactionId}</p>
                     </div>
                   )}
                 </div>
@@ -551,34 +410,59 @@ export function TicketDetail({
             </div>
           </div>
 
+          {/* History */}
+          {history.length > 0 && (
+            <div className="flex-shrink-0 border-b border-border p-3 bg-muted/30">
+              <div className="flex items-center space-x-2 mb-2">
+                <History className="h-3 w-3 text-muted-foreground" />
+                <h4 className="font-medium text-xs text-muted-foreground">Lịch sử thay đổi</h4>
+              </div>
+              {history.slice(0, 5).map((h: any) => (
+                <div key={h.id} className="text-xs text-muted-foreground py-1">
+                  <span className="font-medium text-foreground">{h.agentName}</span>
+                  {' '}đã thay đổi <span className="font-medium">{h.fieldName}</span>
+                  {': '}<span className="line-through">{h.oldValue}</span>
+                  {' → '}<span className="text-foreground">{h.newValue}</span>
+                  <span className="ml-2">{formatRelativeTime(h.changedAt)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Comments Timeline */}
           <div className="flex-1 overflow-hidden">
             <ScrollArea className="h-full">
               <div className="p-3 space-y-3">
                 <div className="flex items-center space-x-2 mb-3">
-                  <History className="h-4 w-4 text-muted-foreground" />
-                  <h3 className="font-medium text-sm text-foreground">Lịch sử tương tác</h3>
+                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                  <h3 className="font-medium text-sm text-foreground">
+                    Bình luận ({comments.length})
+                  </h3>
                 </div>
 
-                {ticket.comments.map((comment) => (
-                  <Card key={comment.id} className={`${
+                {comments.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-4">Chưa có bình luận</p>
+                )}
+
+                {comments.map((comment: any) => (
+                  <Card key={comment.id} className={
                     comment.isInternal ? 'border-yellow-200 bg-yellow-50' : 'border-border'
-                  }`}>
+                  }>
                     <CardContent className="p-3">
                       <div className="flex items-start space-x-2">
                         <Avatar className="h-6 w-6">
                           <AvatarFallback className="text-xs">
-                            {comment.author.charAt(0).toUpperCase()}
+                            {(comment.agentName || 'A').charAt(0).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1">
                           <div className="flex items-center space-x-2 mb-1">
-                            <span className="font-medium text-xs">{comment.author}</span>
+                            <span className="font-medium text-xs">{comment.agentName || 'Agent'}</span>
                             {comment.isInternal && (
                               <Badge className="text-xs bg-yellow-100 text-yellow-800">Nội bộ</Badge>
                             )}
                             <span className="text-xs text-muted-foreground">
-                              {formatRelativeTime(comment.timestamp)}
+                              {formatRelativeTime(comment.createdAt)}
                             </span>
                           </div>
                           <div className="text-xs text-foreground/80 leading-relaxed">
@@ -614,7 +498,7 @@ export function TicketDetail({
                 </label>
                 <Button
                   onClick={handleAddComment}
-                  disabled={!newComment.trim()}
+                  disabled={!newComment.trim() || addComment.isPending}
                   size="sm"
                   className="bg-blue-600 hover:bg-blue-700 h-7"
                 >

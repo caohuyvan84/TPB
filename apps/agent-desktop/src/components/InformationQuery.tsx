@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useBankAccounts, useSavingsProducts, useLoanProducts, useCardProducts, useBfsiTransactions } from '../hooks/useBFSI';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -89,7 +90,6 @@ interface InformationQueryProps {
 
 export function InformationQuery({ customerInfo: customerInfoProp, onBack, onCreateTicket }: InformationQueryProps = {}) {
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory>("accounts");
-  const [isLoading, setIsLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showSensitiveData, setShowSensitiveData] = useState(false);
   const [transactionDateFrom, setTransactionDateFrom] = useState("");
@@ -107,6 +107,50 @@ export function InformationQuery({ customerInfo: customerInfoProp, onBack, onCre
     email: "nguyenvana@email.com",
   };
 
+  // Real API hooks — always call unconditionally
+  const cif = customerInfo.cif;
+  const { data: apiAccounts, isLoading: loadingAccounts } = useBankAccounts(cif);
+  const { data: apiSavings, isLoading: loadingSavings } = useSavingsProducts(cif);
+  const { data: apiLoans, isLoading: loadingLoans } = useLoanProducts(cif);
+  const { data: apiCards, isLoading: loadingCards } = useCardProducts(cif);
+  const { data: apiTransactions, isLoading: loadingTransactions } = useBfsiTransactions(cif, { limit: 20 });
+
+  // Normalize API data to Product interface for existing render logic
+  const normalizeToProduct = (item: any): Product => ({
+    id: item.accountNumber || item.id || String(Math.random()),
+    productCode: item.accountNumber || '',
+    productName: item.productName || '',
+    status: item.status || 'active',
+    ...item,
+  });
+
+  const apiProductsByCategory: Record<string, Product[]> = useMemo(() => ({
+    accounts: (apiAccounts || []).map(normalizeToProduct),
+    savings: (apiSavings || []).map(normalizeToProduct),
+    loans: (apiLoans || []).map(normalizeToProduct),
+    cards: (apiCards || []).map(normalizeToProduct),
+  }), [apiAccounts, apiSavings, apiLoans, apiCards]);
+
+  const apiTransactionList: Transaction[] = useMemo(() =>
+    (apiTransactions || []).map(t => ({
+      id: t.id,
+      date: new Date(t.timestamp).toLocaleString('vi-VN'),
+      description: t.description,
+      amount: t.amount,
+      type: t.type as 'debit' | 'credit',
+      status: 'completed',
+      accountNumber: t.accountNumber,
+      currency: t.currency,
+    })),
+  [apiTransactions]);
+
+  const isLoading = selectedCategory === 'accounts' ? loadingAccounts
+    : selectedCategory === 'savings' ? loadingSavings
+    : selectedCategory === 'loans' ? loadingLoans
+    : selectedCategory === 'cards' ? loadingCards
+    : selectedCategory === 'transactions' ? loadingTransactions
+    : false;
+
   // Product categories
   const categories = [
     { id: "accounts" as ProductCategory, label: "Tài khoản", icon: Wallet },
@@ -119,9 +163,12 @@ export function InformationQuery({ customerInfo: customerInfoProp, onBack, onCre
     { id: "transactions" as ProductCategory, label: "Giao dịch", icon: ArrowLeftRight },
   ];
 
-  // Mock product data based on category
+  // Product data: use real API for accounts/savings/loans/cards, mock for others
   const getProductsByCategory = (category: ProductCategory): Product[] => {
-    const mockData: Record<ProductCategory, Product[]> = {
+    if (['accounts', 'savings', 'loans', 'cards'].includes(category)) {
+      return apiProductsByCategory[category] || [];
+    }
+    const mockData: Record<string, Product[]> = {
       accounts: [
         {
           id: "ACC001",
@@ -425,12 +472,6 @@ export function InformationQuery({ customerInfo: customerInfoProp, onBack, onCre
   const handleCategoryClick = (category: ProductCategory) => {
     setSelectedCategory(category);
     setSelectedProduct(null);
-    
-    // Simulate loading from core system
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 600);
   };
 
   const handleProductClick = (product: Product) => {
@@ -1042,7 +1083,7 @@ export function InformationQuery({ customerInfo: customerInfoProp, onBack, onCre
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">
-                Danh sách giao dịch ({mockTransactions.length})
+                Danh sách giao dịch ({apiTransactionList.length})
               </CardTitle>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline">
@@ -1071,7 +1112,7 @@ export function InformationQuery({ customerInfo: customerInfoProp, onBack, onCre
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {mockTransactions.map((tx) => (
+                  {apiTransactionList.map((tx) => (
                     <TableRow key={tx.id}>
                       <TableCell className="text-xs whitespace-nowrap font-medium">
                         {tx.date}
@@ -1272,7 +1313,7 @@ export function InformationQuery({ customerInfo: customerInfoProp, onBack, onCre
                     {!isLoading && (
                       <Badge variant="outline" className="ml-2">
                         {selectedCategory === "transactions"
-                          ? mockTransactions.length
+                          ? apiTransactionList.length
                           : products.length}{" "}
                         {selectedCategory === "transactions"
                           ? "giao dịch"

@@ -4,40 +4,40 @@ import { Role } from './role.entity';
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   @Column({ unique: true })
-  username: string;
+  username!: string;
 
   @Column({ unique: true })
-  email: string;
+  email!: string;
 
   @Column({ name: 'password_hash' })
-  passwordHash: string;
+  passwordHash!: string;
 
   @Column({ name: 'full_name' })
-  fullName: string;
+  fullName!: string;
 
   @Column({ name: 'agent_id', nullable: true })
-  agentId: string;
+  agentId?: string;
 
   @Column({ name: 'is_active', default: true })
-  isActive: boolean;
+  isActive!: boolean;
 
   @Column({ name: 'mfa_enabled', default: false })
-  mfaEnabled: boolean;
+  mfaEnabled!: boolean;
 
   @Column({ name: 'mfa_secret', nullable: true })
-  mfaSecret: string;
+  mfaSecret?: string;
 
   @Column({ name: 'last_login_at', type: 'timestamptz', nullable: true })
-  lastLoginAt: Date;
+  lastLoginAt?: Date;
 
   @Column({ name: 'failed_login_attempts', default: 0 })
-  failedLoginAttempts: number;
+  failedLoginAttempts!: number;
 
   @Column({ name: 'locked_until', type: 'timestamptz', nullable: true })
-  lockedUntil: Date;
+  lockedUntil?: Date;
 
   @Column({ name: 'tenant_id', type: 'uuid' })
   tenantId!: string;

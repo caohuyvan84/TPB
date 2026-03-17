@@ -1,4 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
+import { useAgentStatus } from '../hooks/useAgents';
+import { agentsApi } from '../lib/api/agents';
+import { toast } from 'sonner';
 
 export type ChannelType = 'voice' | 'email' | 'chat';
 export type AgentStatus = 'ready' | 'not-ready' | 'disconnected';
@@ -135,6 +138,30 @@ export function EnhancedAgentStatusProvider({
     totalNotReadyTime: 0,
   });
 
+  // Sync with API - fetch status from backend
+  const { data: apiStatus } = useAgentStatus();
+
+  // Sync API status to local state
+  useEffect(() => {
+    if (apiStatus && Array.isArray(apiStatus)) {
+      const statusMap: Partial<AgentChannelStatuses> = {};
+      
+      apiStatus.forEach((channelStatus: any) => {
+        const channel = channelStatus.channel as ChannelType;
+        statusMap[channel] = {
+          status: channelStatus.status,
+          reason: channelStatus.reason,
+          customReason: channelStatus.customReason,
+          lastChanged: new Date(channelStatus.changedAt),
+          duration: 0, // Will be calculated by timer
+          isTimerActive: channelStatus.status !== 'disconnected',
+        };
+      });
+
+      setChannelStatuses(prev => ({ ...prev, ...statusMap }));
+    }
+  }, [apiStatus]);
+
   // Update timers every second
   useEffect(() => {
     const updateTimers = () => {
@@ -207,12 +234,13 @@ export function EnhancedAgentStatusProvider({
     return () => window.removeEventListener('keydown', handleKeyboard);
   }, []);
 
-  const setChannelStatus = useCallback((
+  const setChannelStatus = useCallback(async (
     channel: ChannelType, 
     status: AgentStatus, 
     reason?: NotReadyReason, 
     customReason?: string
   ) => {
+    // Optimistic update - update UI immediately
     setChannelStatuses(prev => ({
       ...prev,
       [channel]: {
@@ -220,15 +248,25 @@ export function EnhancedAgentStatusProvider({
         reason: status === 'not-ready' ? reason : undefined,
         customReason: status === 'not-ready' && reason === 'other' ? customReason : undefined,
         lastChanged: new Date(),
-        duration: 0, // Reset timer
+        duration: 0,
         isTimerActive: status !== 'disconnected',
       }
     }));
 
-    // Log status change
-    console.log(`Channel ${channel} status changed to ${status}`, { reason, customReason });
+    // Call API in background
+    try {
+      await agentsApi.updateChannelStatus(
+        channel,
+        status,
+        status === 'not-ready' ? reason : undefined
+      );
+      console.log(`Channel ${channel} status updated via API`);
+    } catch (error) {
+      console.error('Failed to update status via API:', error);
+      // Don't revert - keep optimistic update
+      // Backend will sync on next poll
+    }
     
-    // Update agent activity
     updateAgentActivity();
   }, []);
 

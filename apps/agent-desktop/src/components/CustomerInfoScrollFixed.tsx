@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { Interaction } from './useInteractionStats';
+import { useCustomer, useCustomerInteractions, useCustomerTickets, useCustomerNotes, useAddCustomerNote } from '../hooks/useCustomers';
+import { useCreateTicket } from '../hooks/useTickets';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -82,153 +84,16 @@ const mockCustomer = {
   language: 'Vietnamese'
 };
 
-// Mock interaction history - Expanded for testing scroll
-const mockHistory = [
-  {
-    id: 'INT-001',
-    type: 'email',
-    subject: 'Yêu cầu hỗ trợ kỹ thuật',
-    date: '2025-07-30',
-    time: '14:30',
-    status: 'resolved',
-    agent: 'Agent Mai',
-    priority: 'high',
-    summary: 'Khách hàng gặp sự cố với phần mềm, đã được hỗ trợ cài đặt lại và hướng dẫn sử dụng.',
-    duration: '25 phút'
-  },
-  {
-    id: 'INT-002',
-    type: 'call',
-    subject: 'Tư vấn nâng cấp gói dịch vụ',
-    date: '2025-07-28',
-    time: '09:15',
-    status: 'completed',
-    agent: 'Agent Duc',
-    priority: 'medium',
-    summary: 'Tư vấn các gói dịch vụ premium, khách hàng quan tâm và sẽ cân nhắc.',
-    duration: '15 phút'
-  },
-  {
-    id: 'INT-003',
-    type: 'chat',
-    subject: 'Hỏi về hóa đơn tháng 7',
-    date: '2025-07-25',
-    time: '16:45',
-    status: 'resolved',
-    agent: 'Agent Linh',
-    priority: 'low',
-    summary: 'Giải thích chi tiết các khoản phí trong hóa đơn, khách hàng đã hiểu rõ.',
-    duration: '10 phút'
-  },
-  {
-    id: 'INT-004',
-    type: 'email',
-    subject: 'Khiếu nại về chất lượng dịch vụ',
-    date: '2025-07-20',
-    time: '11:20',
-    status: 'escalated',
-    agent: 'Agent Nga',
-    priority: 'urgent',
-    summary: 'Khách hàng không hài lòng về thời gian phản hồi, đã chuyển lên supervisor xử lý.',
-    duration: '45 phút'
-  },
-  // Add more items to test scroll
-  ...Array.from({ length: 10 }, (_, index) => ({
-    id: `INT-${String(index + 7).padStart(3, '0')}`,
-    type: ['email', 'call', 'chat'][index % 3],
-    subject: `Tương tác ${index + 7} - Test scroll`,
-    date: '2025-07-10',
-    time: '10:00',
-    status: 'resolved',
-    agent: `Agent ${['Mai', 'Duc', 'Linh'][index % 3]}`,
-    priority: ['low', 'medium', 'high'][index % 3],
-    summary: `Tương tác test số ${index + 7} để kiểm tra scroll`,
-    duration: `${5 + index} phút`
-  }))
-];
-
-// Mock tickets related to this customer - Expanded for testing scroll
-const mockCustomerTickets = [
-  {
-    id: 'TKT-001',
-    number: 'TKT-001',
-    classification: 'bug',
-    classificationLabel: 'Báo lỗi',
-    title: 'login-error',
-    titleLabel: 'Lỗi đăng nhập',
-    status: 'in-progress',
-    priority: 'high',
-    createdAt: new Date('2025-08-01T10:30:00Z'),
-    updatedAt: new Date('2025-08-01T14:25:00Z'),
-    dueDate: new Date('2025-08-01T18:00:00Z'),
-    assignedAgent: 'Agent Tung',
-    interactionId: 'INT-001',
-    source: 'From Email Interaction'
-  },
-  {
-    id: 'TKT-003',
-    number: 'TKT-003',
-    classification: 'account',
-    classificationLabel: 'Tài khoản',
-    title: 'register-cancel-update',
-    titleLabel: 'Đăng ký/Hủy/Thay đổi thông tin',
-    status: 'resolved',
-    priority: 'medium',
-    createdAt: new Date('2025-07-28T09:15:00Z'),
-    updatedAt: new Date('2025-07-28T16:30:00Z'),
-    dueDate: new Date('2025-07-29T17:00:00Z'),
-    assignedAgent: 'Agent Mai',
-    interactionId: 'INT-002',
-    source: 'From Call Interaction'
-  },
-  // Add more tickets to test scroll
-  ...Array.from({ length: 8 }, (_, index) => ({
-    id: `TKT-${String(index + 10).padStart(3, '0')}`,
-    number: `TKT-${String(index + 10).padStart(3, '0')}`,
-    classification: ['bug', 'transfer', 'insurance'][index % 3],
-    classificationLabel: ['Báo lỗi', 'Chuyển tiền', 'Bảo hiểm'][index % 3],
-    title: ['login-error', 'internal-transfer', 'buy-insurance'][index % 3],
-    titleLabel: ['Lỗi đăng nhập', 'Chuyển khoản nội bộ', 'Mua bảo hiểm'][index % 3],
-    status: ['new', 'in-progress', 'resolved'][index % 3],
-    priority: ['low', 'medium', 'high'][index % 3],
-    createdAt: new Date(Date.now() - (index + 1) * 24 * 60 * 60 * 1000),
-    updatedAt: new Date(Date.now() - index * 12 * 60 * 60 * 1000),
-    dueDate: new Date(Date.now() + (index + 1) * 24 * 60 * 60 * 1000),
-    assignedAgent: `Agent ${['Tung', 'Mai', 'Duc'][index % 3]}`,
-    interactionId: null,
-    source: 'Test Data'
-  }))
-];
-
-// Mock notes data
-const mockNotes = [
-  {
-    id: 'note-1',
-    content: 'Khách hàng rất quan tâm đến việc nâng cấp hệ thống. Đã hẹn call lại vào tuần tới để thảo luận chi tiết về package Enterprise.',
-    author: 'Agent Mai',
-    timestamp: new Date('2025-07-30T14:30:00Z'),
-    isPrivate: false,
-    tags: ['follow-up', 'enterprise']
-  },
-  {
-    id: 'note-2',
-    content: 'Khách hàng có phản hồi tích cực về dịch vụ support. Đề xuất chuyển sang VIP support tier.',
-    author: 'Agent Duc',
-    timestamp: new Date('2025-07-28T10:15:00Z'),
-    isPrivate: true,
-    tags: ['vip', 'escalation']
-  },
-  {
-    id: 'note-3',
-    content: 'Lưu ý: Khách hàng chỉ có thể nhận cuộc gọi sau 2PM do lịch làm việc. Ưu tiên liên lạc qua email.',
-    author: 'Agent Linh',
-    timestamp: new Date('2025-07-25T16:45:00Z'),
-    isPrivate: false,
-    tags: ['preference', 'timing']
-  }
-];
 
 export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicket, defaultTab = 'tickets', onCreateTicket }: CustomerInfoProps) {
+  // Fetch customer data from API
+  const customerId = interaction?.customerId as string | null;
+  const { data: customer, isLoading: customerLoading } = useCustomer(customerId);
+  const { data: customerInteractions = [], isLoading: interactionsLoading } = useCustomerInteractions(customerId);
+  const { data: customerTickets = [], isLoading: ticketsLoading } = useCustomerTickets(customerId);
+  const { data: customerNotes = [], isLoading: notesLoading } = useCustomerNotes(customerId);
+  const createTicketMutation = useCreateTicket();
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [previewInteraction, setPreviewInteraction] = useState<any>(null);
@@ -263,6 +128,31 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
   // Ticket attachments state
   const [ticketFormAttachments, setTicketFormAttachments] = useState<File[]>([]);
 
+  // Map API customer data to display shape, fallback to mock for missing fields
+  const displayCustomer = customer ? {
+    id: customer.id,
+    name: customer.fullName || interaction?.customerName || 'Unknown',
+    emails: [
+      { id: 1, email: customer.email || '', type: 'primary', verified: true },
+    ],
+    phones: [
+      { id: 1, phone: customer.phone || '', type: 'mobile', verified: true },
+    ],
+    address: customer.dynamicFields?.address || '',
+    level: customer.isVip ? 'VIP' : (customer.segment || 'Standard'),
+    joinDate: customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('vi-VN') : '',
+    totalInteractions: customerInteractions.length,
+    satisfaction: customer.satisfactionRating ?? 0,
+    tags: [customer.segment, customer.isVip ? 'VIP' : ''].filter(Boolean),
+    company: customer.dynamicFields?.company || customer.dynamicFields?.occupation || '',
+    position: customer.dynamicFields?.position || customer.dynamicFields?.occupation || '',
+    preferredContact: 'email',
+    timezone: 'Asia/Ho_Chi_Minh',
+    language: 'Vietnamese',
+    cif: customer.cif || '',
+    segment: customer.segment || '',
+  } : mockCustomer;
+
   // Data for ticket creation
   const categories = [
     'Technical Support',
@@ -296,19 +186,30 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
     { id: 'team-4', name: 'Sales Team', memberCount: 6, department: 'Bán hàng' }
   ];
 
-  const filteredHistory = mockHistory.filter(item => {
-    const matchesSearch = item.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.agent.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = selectedFilter === 'all' || item.type === selectedFilter;
+  // Normalize type from channel when type field is wrong (e.g. 'inbound'/'outbound')
+  const normalizeInteractionType = (item: any): string => {
+    const channelMap: Record<string, string> = { voice: 'call', email: 'email', chat: 'chat' };
+    const validTypes = ['call', 'missed-call', 'email', 'chat'];
+    if (validTypes.includes(item.type)) return item.type;
+    return channelMap[item.channel] || 'call';
+  };
+
+  const filteredHistory = (customerInteractions || []).filter((item: any) => {
+    const subject = (item.subject || '').toLowerCase();
+    const agent = (item.assignedAgentName || item.agent || '').toLowerCase();
+    const matchesSearch = subject.includes(searchTerm.toLowerCase()) || agent.includes(searchTerm.toLowerCase());
+    const itemType = normalizeInteractionType(item);
+    // 'call' sub-tab matches both 'call' and 'missed-call'
+    const itemTabKey = itemType === 'missed-call' ? 'call' : itemType;
+    const matchesFilter = selectedFilter === 'all' || itemTabKey === selectedFilter;
     return matchesSearch && matchesFilter;
   });
 
-  const filteredTickets = mockCustomerTickets.filter(ticket => {
-    const titleText = ticket.titleLabel || ticket.title || '';
+  const filteredTickets = (customerTickets || []).filter((ticket: any) => {
+    const titleText = ticket.title || '';
     const matchesSearch = titleText.toLowerCase().includes(ticketSearchTerm.toLowerCase()) ||
-                         ticket.number.toLowerCase().includes(ticketSearchTerm.toLowerCase()) ||
-                         ticket.assignedAgent.toLowerCase().includes(ticketSearchTerm.toLowerCase()) ||
-                         (ticket.classificationLabel || '').toLowerCase().includes(ticketSearchTerm.toLowerCase());
+                         (ticket.displayId || '').toLowerCase().includes(ticketSearchTerm.toLowerCase()) ||
+                         (ticket.category || '').toLowerCase().includes(ticketSearchTerm.toLowerCase());
     const matchesFilter = ticketFilter === 'all' || ticket.status === ticketFilter;
     return matchesSearch && matchesFilter;
   });
@@ -316,6 +217,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
   const getInteractionIcon = (type: string) => {
     switch (type) {
       case 'call': return <Phone className="h-4 w-4" />;
+      case 'missed-call': return <Phone className="h-4 w-4 text-red-500" />;
       case 'email': return <Mail className="h-4 w-4" />;
       case 'chat': return <MessageCircle className="h-4 w-4" />;
       default: return <FileText className="h-4 w-4" />;
@@ -324,11 +226,27 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'resolved': return 'bg-green-100 text-green-800';
-      case 'completed': return 'bg-blue-100 text-blue-800';
-      case 'escalated': return 'bg-red-100 text-red-800';
+      case 'active': return 'bg-blue-100 text-blue-800';
       case 'in-progress': return 'bg-yellow-100 text-yellow-800';
+      case 'waiting': return 'bg-orange-100 text-orange-800';
+      case 'closed': return 'bg-muted text-foreground';
+      case 'resolved': return 'bg-green-100 text-green-800';
+      case 'completed': return 'bg-green-100 text-green-800';
+      case 'escalated': return 'bg-red-100 text-red-800';
       default: return 'bg-muted text-foreground';
+    }
+  };
+
+  const getInteractionStatusLabel = (status: string) => {
+    switch (status) {
+      case 'active': return 'Đang hoạt động';
+      case 'in-progress': return 'Đang xử lý';
+      case 'waiting': return 'Đang chờ';
+      case 'closed': return 'Đã đóng';
+      case 'resolved': return 'Đã giải quyết';
+      case 'completed': return 'Hoàn thành';
+      case 'escalated': return 'Chuyển cấp trên';
+      default: return status;
     }
   };
 
@@ -382,7 +300,10 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
     }
   };
 
-  const formatTimeAgo = (date: Date) => {
+  const formatTimeAgo = (date: Date | string | undefined | null) => {
+    if (!date) return '';
+    if (typeof date === 'string') date = new Date(date);
+    if (isNaN(date.getTime())) return '';
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
@@ -501,60 +422,41 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
     }
   };
 
-  const handleSaveTicketFromForm = () => {
+  const handleSaveTicketFromForm = async () => {
     if (!ticketFormData.title.trim()) {
       toast.error('Vui lòng nhập tiêu đề ticket');
       return;
     }
-    
+
     if (!ticketFormData.category) {
       toast.error('Vui lòng chọn danh mục ticket');
       return;
     }
 
-    if (onCreateTicket) {
-      const newTicket = {
-        id: `TKT-${Date.now()}`,
-        number: `TKT-${Date.now()}`,
+    const customerIdForTicket = customerId || customer?.id;
+    if (!customerIdForTicket) {
+      toast.error('Không xác định được khách hàng cho ticket này');
+      return;
+    }
+
+    try {
+      const result = await createTicketMutation.mutateAsync({
         title: ticketFormData.title,
         description: ticketFormData.description,
-        status: 'in-progress' as const,
-        priority: ticketFormData.priority as 'low' | 'medium' | 'high' | 'urgent',
+        priority: ticketFormData.priority,
         category: ticketFormData.category,
-        customer: {
-          name: mockCustomer.name,
-          email: mockCustomer.emails[0].email,
-          phone: mockCustomer.phones[0].phone,
-          avatar: undefined,
-          isVIP: mockCustomer.level === 'VIP'
-        },
-        assignedAgent: ticketFormData.assignedAgent 
-          ? agents.find(a => a.id === ticketFormData.assignedAgent)?.name || 'Unassigned'
-          : ticketFormData.assignedTeam 
-          ? teams.find(t => t.id === ticketFormData.assignedTeam)?.name || 'Unassigned'
-          : 'Unassigned',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        dueDate: ticketFormData.dueDate ? new Date(ticketFormData.dueDate) : new Date(Date.now() + 24 * 60 * 60 * 1000),
-        tags: ['from-interaction'],
-        comments: [
-          {
-            id: `comment-${Date.now()}`,
-            author: 'System',
-            content: `Ticket được tạo từ tương tác ${interaction?.id}`,
-            timestamp: new Date(),
-            type: 'comment' as const,
-            isInternal: true
-          }
-        ],
+        customerId: customerIdForTicket,
         interactionId: interaction?.id,
-        source: 'From Current Interaction'
-      };
-      
-      onCreateTicket(newTicket);
+      });
+
+      const newTicket = { ...result, number: result.displayId };
+
+      if (onCreateTicket) {
+        onCreateTicket(newTicket);
+      }
+
       setShowCreateTicketForm(false);
-      toast.success('Ticket đã được tạo thành công');
-      
+
       // Reset form
       setTicketFormData({
         title: '',
@@ -566,9 +468,12 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
         assignedAgent: '',
         assignedTeam: ''
       });
-      
+
       // Reset attachments
       setTicketFormAttachments([]);
+    } catch (error) {
+      // Error toast already shown by mutation onError
+      console.error('Failed to save ticket:', error);
     }
   };
 
@@ -613,14 +518,14 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
             <User className="h-6 w-6 text-blue-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-foreground truncate">{mockCustomer.name}</h3>
+            <h3 className="font-semibold text-foreground truncate">{displayCustomer.name}</h3>
             <div className="flex items-center space-x-2">
               <Badge className="bg-yellow-100 text-yellow-800 text-xs">
-                {mockCustomer.level}
+                {displayCustomer.level}
               </Badge>
               <div className="flex items-center text-xs text-muted-foreground">
                 <Star className="h-3 w-3 mr-1 text-yellow-500" />
-                {mockCustomer.satisfaction}
+                {displayCustomer.satisfaction}
               </div>
             </div>
           </div>
@@ -630,11 +535,11 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div className="flex items-center text-muted-foreground">
             <Mail className="h-3 w-3 mr-1" />
-            <span className="truncate">{mockCustomer.emails[0].email}</span>
+            <span className="truncate">{displayCustomer.emails[0].email}</span>
           </div>
           <div className="flex items-center text-muted-foreground">
             <Phone className="h-3 w-3 mr-1" />
-            <span>{mockCustomer.phones[0].phone}</span>
+            <span>{displayCustomer.phones[0].phone}</span>
           </div>
         </div>
       </div>
@@ -678,7 +583,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                     </div>
                     <h3 className="flex items-center text-base font-medium">
                       <Ticket className="h-5 w-5 mr-2 text-[#155DFC]" />
-                      {selectedTicketForView.number}
+                      {selectedTicketForView.displayId}
                     </h3>
                     <Separator className="mt-3" />
                   </div>
@@ -688,7 +593,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                     {/* Title */}
                     <div>
                       <Label className="text-xs text-muted-foreground">Tiêu đề</Label>
-                      <p className="text-sm font-medium mt-1">{selectedTicketForView.titleLabel || selectedTicketForView.title}</p>
+                      <p className="text-sm font-medium mt-1">{selectedTicketForView.title}</p>
                     </div>
 
                     {/* Description */}
@@ -705,7 +610,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label className="text-xs text-muted-foreground">Phân loại</Label>
-                        <p className="text-sm font-medium mt-1">{selectedTicketForView.classificationLabel || 'Chưa phân loại'}</p>
+                        <p className="text-sm font-medium mt-1">{selectedTicketForView.category || 'Chưa phân loại'}</p>
                       </div>
 
                       <div>
@@ -733,14 +638,14 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
 
                       <div>
                         <Label className="text-xs text-muted-foreground">Người xử lý</Label>
-                        <p className="text-sm font-medium mt-1">{selectedTicketForView.assignedAgent || 'Chưa phân công'}</p>
+                        <p className="text-sm font-medium mt-1">{selectedTicketForView.assignedAgentId ? `Agent: ${selectedTicketForView.assignedAgentId.slice(0, 8)}` : 'Chưa phân công'}</p>
                       </div>
 
                       <div>
                         <Label className="text-xs text-muted-foreground">Hạn xử lý</Label>
                         <p className="text-sm font-medium mt-1">
-                          {selectedTicketForView.dueDate 
-                            ? new Date(selectedTicketForView.dueDate).toLocaleDateString('vi-VN')
+                          {selectedTicketForView.dueAt
+                            ? new Date(selectedTicketForView.dueAt).toLocaleDateString('vi-VN')
                             : 'Chưa có'}
                         </p>
                       </div>
@@ -763,32 +668,17 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                     <Separator />
 
                     {/* Customer Info */}
-                    <div>
-                      <h4 className="text-sm font-medium mb-3 flex items-center">
-                        <User className="h-4 w-4 mr-2" />
-                        Thông tin khách hàng
-                      </h4>
-                      <div className="rounded-md border border-border bg-muted/50 p-3 space-y-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">Tên:</span>
-                          <span className="font-medium">{selectedTicketForView.customer?.name}</span>
+                    {selectedTicketForView.customerId && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-3 flex items-center">
+                          <User className="h-4 w-4 mr-2" />
+                          Khách hàng
+                        </h4>
+                        <div className="rounded-md border border-border bg-muted/50 p-3">
+                          <p className="text-xs text-muted-foreground">ID: <span className="font-mono font-medium">{selectedTicketForView.customerId}</span></p>
                         </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">Email:</span>
-                          <span className="font-medium">{selectedTicketForView.customer?.email}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">SĐT:</span>
-                          <span className="font-medium">{selectedTicketForView.customer?.phone}</span>
-                        </div>
-                        {selectedTicketForView.customer?.isVIP && (
-                          <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">
-                            <Star className="h-3 w-3 mr-1 fill-current" />
-                            VIP
-                          </Badge>
-                        )}
                       </div>
-                    </div>
+                    )}
 
                     {/* Tags */}
                     {selectedTicketForView.tags && selectedTicketForView.tags.length > 0 && (
@@ -814,7 +704,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                           className="flex items-center space-x-1 text-sm text-blue-600 hover:text-blue-800 hover:underline mt-1"
                         >
                           <ChevronRight className="h-3 w-3" />
-                          <span>{selectedTicketForView.interactionId} - {selectedTicketForView.source || 'Tương tác'}</span>
+                          <span>{selectedTicketForView.interactionId}</span>
                         </button>
                       </div>
                     )}
@@ -833,7 +723,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                             <div key={comment.id} className="border-l-2 border-border pl-3">
                               <div className="flex items-center justify-between mb-1">
                                 <div className="flex items-center space-x-2">
-                                  <span className="text-xs font-medium text-foreground/80">{comment.author}</span>
+                                  <span className="text-xs font-medium text-foreground/80">{comment.agentName || 'Agent'}</span>
                                   {comment.isInternal && (
                                     <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300">
                                       Nội bộ
@@ -841,7 +731,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                                   )}
                                 </div>
                                 <span className="text-xs text-muted-foreground">
-                                  {formatTimeAgo(comment.timestamp)}
+                                  {formatTimeAgo(comment.createdAt)}
                                 </span>
                               </div>
                               <p className="text-xs text-muted-foreground">{comment.content}</p>
@@ -929,7 +819,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                       <p className="text-sm">Không tìm thấy ticket nào</p>
                     </div>
                   ) : (
-                    filteredTickets.map((ticket) => (
+                    filteredTickets.map((ticket: any) => (
                       <Card 
                         key={ticket.id} 
                         className="cursor-pointer hover:shadow-sm border-l-4 border-l-transparent hover:border-l-purple-500 transition-all"
@@ -938,29 +828,29 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                         <CardContent className="p-3">
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex items-start space-x-2 flex-1 min-w-0">
-                              <div className={`p-1 rounded ${ 
-                                ticket.classification === 'bug' ? 'bg-red-100' :
-                                ticket.classification === 'account' ? 'bg-blue-100' :
-                                ticket.classification === 'transfer' ? 'bg-green-100' :
-                                ticket.classification === 'insurance' ? 'bg-purple-100' :
-                                ticket.classification === 'promotion' ? 'bg-yellow-100' : 'bg-muted'
+                              <div className={`p-1 rounded ${
+                                ticket.category === 'bug' ? 'bg-red-100' :
+                                ticket.category === 'account' ? 'bg-blue-100' :
+                                ticket.category === 'transfer' ? 'bg-green-100' :
+                                ticket.category === 'insurance' ? 'bg-purple-100' :
+                                ticket.category === 'promotion' ? 'bg-yellow-100' : 'bg-muted'
                               }`}>
-                                {getTicketIcon(ticket.classification)}
+                                {getTicketIcon(ticket.category)}
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center flex-wrap gap-1 mb-1">
-                                  <p className="text-xs font-medium text-muted-foreground">{ticket.number}</p>
+                                  <p className="text-xs font-medium text-muted-foreground">{ticket.displayId}</p>
                                   <Badge className={getTicketStatusColor(ticket.status)}>
                                     {getTicketStatusLabel(ticket.status)}
                                   </Badge>
-                                  {ticket.classificationLabel && (
+                                  {ticket.category && (
                                     <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-300">
-                                      {ticket.classificationLabel}
+                                      {ticket.category}
                                     </Badge>
                                   )}
                                 </div>
-                                <p className="font-medium text-sm truncate mb-1">{ticket.titleLabel || ticket.title}</p>
-                                <p className="text-xs text-muted-foreground">{ticket.assignedAgent}</p>
+                                <p className="font-medium text-sm truncate mb-1">{ticket.title}</p>
+                                <p className="text-xs text-muted-foreground">{ticket.assignedAgentId ? `Agent: ${ticket.assignedAgentId.slice(0, 8)}` : 'Chưa phân công'}</p>
                               </div>
                             </div>
                             <div className="flex items-center space-x-1 flex-shrink-0">
@@ -1007,10 +897,10 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                           )}
 
                           {/* Due date warning */}
-                          {ticket.status !== 'completed' && ticket.dueDate && new Date() > ticket.dueDate && (
+                          {ticket.status !== 'completed' && ticket.dueAt && new Date() > new Date(ticket.dueAt) && (
                             <div className="mt-2 flex items-center space-x-1 text-xs text-red-600">
                               <AlertCircle className="h-3 w-3" />
-                              <span>Quá hạn: {formatTimeAgo(ticket.dueDate)}</span>
+                              <span>Quá hạn: {formatTimeAgo(new Date(ticket.dueAt))}</span>
                             </div>
                           )}
                         </CardContent>
@@ -1162,7 +1052,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                 <div className="flex-shrink-0 pt-3 border-t mt-3">
                   <div className="flex items-center space-x-2">
                     <Button variant="outline" onClick={handleCancelCreateTicket} className="flex-1" size="sm"><X className="h-4 w-4 mr-1" />Hủy</Button>
-                    <Button onClick={handleSaveTicketFromForm} className="flex-1 bg-[#155DFC] hover:bg-[#1348D6]" size="sm"><Check className="h-4 w-4 mr-1" />Tạo Ticket</Button>
+                    <Button onClick={handleSaveTicketFromForm} className="flex-1 bg-[#155DFC] hover:bg-[#1348D6]" size="sm" disabled={createTicketMutation.isPending}><Check className="h-4 w-4 mr-1" />{createTicketMutation.isPending ? 'Đang tạo...' : 'Tạo Ticket'}</Button>
                   </div>
                 </div>
               </div>
@@ -1205,11 +1095,23 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
 
                 {/* History List - Scrollable */}
                 <div className="flex-1 overflow-y-auto space-y-2 pb-4 min-h-0">
+                  {interactionsLoading ? (
+                    <p className="text-xs text-muted-foreground text-center py-8">Đang tải lịch sử...</p>
+                  ) : filteredHistory.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-8">Không có lịch sử tương tác</p>
+                  ) : null}
                   {filteredHistory
-                    .filter(item => historySubTab === 'all' || item.type === historySubTab)
-                    .map((item) => (
-                    <Card 
-                      key={item.id} 
+                    .filter((item: any) => {
+                      if (historySubTab === 'all') return true;
+                      const itemType = normalizeInteractionType(item);
+                      const itemTabKey = itemType === 'missed-call' ? 'call' : itemType;
+                      return itemTabKey === historySubTab;
+                    })
+                    .map((item: any) => {
+                      const itemType = normalizeInteractionType(item);
+                      return (
+                    <Card
+                      key={item.id}
                       className="group cursor-pointer hover:shadow-sm border-l-4 border-l-transparent hover:border-l-blue-500 transition-all"
                       onClick={() => setPreviewInteraction(item)}
                       data-interaction-id={item.id}
@@ -1218,25 +1120,25 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center space-x-2">
                             <div className={`p-1 rounded ${
-                              item.type === 'call' ? 'bg-blue-100' :
-                              item.type === 'email' ? 'bg-orange-100' : 'bg-green-100'
+                              itemType === 'call' || itemType === 'missed-call' ? 'bg-blue-100' :
+                              itemType === 'email' ? 'bg-orange-100' : 'bg-green-100'
                             }`}>
-                              {getInteractionIcon(item.type)}
+                              {getInteractionIcon(itemType)}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="font-medium text-sm truncate">{item.subject}</p>
-                              <p className="text-xs text-muted-foreground">{item.agent}</p>
+                              <p className="font-medium text-sm truncate">{item.subject || item.displayId}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {item.assignedAgentName || item.agent || 'Chưa phân công'}
+                              </p>
                             </div>
                           </div>
                           <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                         </div>
-                        
+
                         <div className="flex items-center justify-between text-xs">
                           <div className="flex items-center space-x-2">
                             <Badge className={getStatusColor(item.status)}>
-                              {item.status === 'resolved' ? 'Đã giải quyết' :
-                               item.status === 'completed' ? 'Hoàn thành' :
-                               item.status === 'escalated' ? 'Chuyển cấp trên' : 'Đang xử lý'}
+                              {getInteractionStatusLabel(item.status)}
                             </Badge>
                             <span className={`${getPriorityColor(item.priority)}`}>
                               {item.priority === 'urgent' ? 'Khẩn cấp' :
@@ -1246,12 +1148,12 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                           </div>
                           <div className="flex items-center text-muted-foreground">
                             <Calendar className="h-3 w-3 mr-1" />
-                            <span>{item.date}</span>
+                            <span>{formatTimeAgo(item.createdAt || item.date)}</span>
                           </div>
                         </div>
                       </CardContent>
                     </Card>
-                  ))}
+                  );})}
                 </div>
               </div>
             </TabsContent>
@@ -1287,33 +1189,33 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                         <div className="grid grid-cols-2 gap-3 text-sm">
                           <div>
                             <p className="text-muted-foreground text-xs">Tên khách hàng</p>
-                            <p className="font-medium">{mockCustomer.name}</p>
+                            <p className="font-medium">{displayCustomer.name}</p>
                           </div>
                           <div>
                             <p className="text-muted-foreground text-xs">Mức độ</p>
                             <Badge className="bg-yellow-100 text-yellow-800">
-                              {mockCustomer.level}
+                              {displayCustomer.level}
                             </Badge>
                           </div>
                           <div>
                             <p className="text-muted-foreground text-xs">Ngày tham gia</p>
-                            <p>{mockCustomer.joinDate}</p>
+                            <p>{displayCustomer.joinDate}</p>
                           </div>
                           <div>
                             <p className="text-muted-foreground text-xs">Tổng tương tác</p>
-                            <p>{mockCustomer.totalInteractions}</p>
+                            <p>{displayCustomer.totalInteractions}</p>
                           </div>
                           <div>
                             <p className="text-muted-foreground text-xs">Đánh giá hài lòng</p>
                             <div className="flex items-center space-x-1">
                               <Star className="h-4 w-4 text-yellow-500" />
-                              <span>{mockCustomer.satisfaction}/5</span>
+                              <span>{displayCustomer.satisfaction}/5</span>
                             </div>
                           </div>
                           <div>
                             <p className="text-muted-foreground text-xs">Tags</p>
                             <div className="flex flex-wrap gap-1">
-                              {mockCustomer.tags.map((tag, index) => (
+                              {displayCustomer.tags.map((tag, index) => (
                                 <Badge key={index} variant="outline" className="text-xs">
                                   {tag}
                                 </Badge>
@@ -1352,7 +1254,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                         <div>
                           <p className="text-muted-foreground text-xs mb-2">Email</p>
                           <div className="space-y-2">
-                            {mockCustomer.emails.map((email) => (
+                            {displayCustomer.emails.map((email) => (
                               <div key={email.id} className="flex items-center justify-between">
                                 <div className="flex items-center space-x-2">
                                   <Mail className="h-3 w-3 text-muted-foreground" />
@@ -1388,7 +1290,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                         <div>
                           <p className="text-muted-foreground text-xs mb-2">Số điện thoại</p>
                           <div className="space-y-2">
-                            {mockCustomer.phones.map((phone) => (
+                            {displayCustomer.phones.map((phone) => (
                               <div key={phone.id} className="flex items-center justify-between">
                                 <div className="flex items-center space-x-2">
                                   <Phone className="h-3 w-3 text-muted-foreground" />
@@ -1426,12 +1328,12 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-2">
                               <MapPin className="h-3 w-3 text-muted-foreground" />
-                              <span className="text-sm">{mockCustomer.address}</span>
+                              <span className="text-sm">{displayCustomer.address}</span>
                             </div>
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleCopyToClipboard(mockCustomer.address, 'address')}
+                              onClick={() => handleCopyToClipboard(displayCustomer.address, 'address')}
                               className="h-6 w-6 p-0"
                             >
                               {copiedItem === 'address' ? (
@@ -1472,11 +1374,11 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                         <div className="grid grid-cols-1 gap-3 text-sm">
                           <div>
                             <p className="text-muted-foreground text-xs">Công ty</p>
-                            <p className="font-medium">{mockCustomer.company}</p>
+                            <p className="font-medium">{displayCustomer.company}</p>
                           </div>
                           <div>
                             <p className="text-muted-foreground text-xs">Chức vụ</p>
-                            <p>{mockCustomer.position}</p>
+                            <p>{displayCustomer.position}</p>
                           </div>
                         </div>
                       </CardContent>
@@ -1509,15 +1411,15 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                         <div className="grid grid-cols-2 gap-3 text-sm">
                           <div>
                             <p className="text-muted-foreground text-xs">Kênh liên lạc ưu tiên</p>
-                            <p className="capitalize">{mockCustomer.preferredContact}</p>
+                            <p className="capitalize">{displayCustomer.preferredContact}</p>
                           </div>
                           <div>
                             <p className="text-muted-foreground text-xs">Múi giờ</p>
-                            <p>{mockCustomer.timezone}</p>
+                            <p>{displayCustomer.timezone}</p>
                           </div>
                           <div>
                             <p className="text-muted-foreground text-xs">Ngôn ngữ</p>
-                            <p>{mockCustomer.language}</p>
+                            <p>{displayCustomer.language}</p>
                           </div>
                         </div>
                       </CardContent>
@@ -1530,7 +1432,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
             {/* Truy vấn core Tab */}
             <TabsContent value="bfsi" className="mt-3 h-full flex flex-col data-[state=active]:flex">
               <div className="flex-1 overflow-hidden">
-                <CoreBFSI customerId={mockCustomer.id} />
+                <CoreBFSI customerId={displayCustomer.id} />
               </div>
             </TabsContent>
 
@@ -1574,7 +1476,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
 
                 {/* Notes List */}
                 <div className="flex-1 overflow-y-auto space-y-3 pb-4 min-h-0">
-                  {mockNotes.map((note) => (
+                  {customerNotes.map((note: any) => (
                     <Card key={note.id} className="border-l-4 border-l-blue-500">
                       <CardContent className="p-3">
                         <div className="flex items-start justify-between mb-2">
@@ -1583,9 +1485,9 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                               <FileText className="h-3 w-3 text-blue-600" />
                             </div>
                             <div>
-                              <p className="text-xs font-medium text-muted-foreground">{note.author}</p>
+                              <p className="text-xs font-medium text-muted-foreground">{note.author || note.createdBy || ''}</p>
                               <p className="text-xs text-muted-foreground">
-                                {formatTimeAgo(note.timestamp)}
+                                {formatTimeAgo(note.timestamp || note.createdAt)}
                               </p>
                             </div>
                           </div>
@@ -1610,7 +1512,7 @@ export function CustomerInfo({ interaction, onNavigateToInteraction, onViewTicke
                         
                         {note.tags && note.tags.length > 0 && (
                           <div className="flex flex-wrap gap-1">
-                            {note.tags.map((tag, index) => (
+                            {note.tags.map((tag: string, index: number) => (
                               <Badge key={index} variant="outline" className="text-xs">
                                 <Tag className="h-2 w-2 mr-1" />
                                 {tag}

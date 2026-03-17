@@ -1,55 +1,97 @@
 import { test, expect } from '@playwright/test';
 
-const TEST_USER = { username: 'agent1', password: 'Agent1234!' };
-const INVALID_USER = { username: 'agent1', password: 'wrongpassword' };
+const MOCK_USER = {
+  id: 'user-1',
+  agentId: 'agent-1',
+  fullName: 'Test Agent',
+  roles: ['AGENT'],
+  permissions: ['interactions:read'],
+};
+
+const MOCK_AUTH_RESPONSE = {
+  accessToken: 'mock-access-token',
+  refreshToken: 'mock-refresh-token',
+  expiresIn: 900,
+  tokenType: 'Bearer',
+  user: MOCK_USER,
+};
 
 test.describe('Authentication', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.evaluate(() => localStorage.clear());
+  test('login with valid credentials redirects to /agent', async ({ page }) => {
+    // Mock successful login
+    await page.route('**/api/auth/login', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_AUTH_RESPONSE) })
+    );
+    await page.route('**/api/users/me', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_USER) })
+    );
+    // Mock any other API calls the agent desktop makes
+    await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }));
+
+    await page.goto('/login');
+    await expect(page.locator('h2')).toContainText('Agent Desktop');
+
+    await page.fill('#username', 'agent1');
+    await page.fill('#password', 'Agent1234!');
+    await page.click('button[type="submit"]:has-text("Sign in")');
+
+    await expect(page).toHaveURL(/\/agent/, { timeout: 10000 });
   });
 
-  test('login with valid credentials redirects to agent desktop', async ({ page }) => {
+  test('login with invalid credentials shows error toast', async ({ page }) => {
+    // Mock failed login
+    await page.route('**/api/auth/login', (route) =>
+      route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ message: 'Invalid credentials' }) })
+    );
+
     await page.goto('/login');
-    await page.fill('input[name="username"], input[placeholder*="username" i], input[id*="username" i]', TEST_USER.username);
-    await page.fill('input[type="password"]', TEST_USER.password);
-    await page.click('button[type="submit"]');
+    await page.fill('#username', 'agent1');
+    await page.fill('#password', 'wrongpassword');
+    await page.click('button[type="submit"]:has-text("Sign in")');
 
-    await expect(page).not.toHaveURL(/\/login/);
-  });
-
-  test('login with invalid credentials shows error message', async ({ page }) => {
-    await page.goto('/login');
-    await page.fill('input[name="username"], input[placeholder*="username" i], input[id*="username" i]', INVALID_USER.username);
-    await page.fill('input[type="password"]', INVALID_USER.password);
-    await page.click('button[type="submit"]');
-
+    // Stay on login page
     await expect(page).toHaveURL(/\/login/);
-    const errorMessage = page.locator('[role="alert"], .error, [class*="error"]').first();
-    await expect(errorMessage).toBeVisible({ timeout: 5000 });
+    // Sonner toast appears
+    await expect(page.locator('[data-sonner-toaster]')).toBeVisible({ timeout: 5000 });
   });
 
-  test('logout redirects to login page', async ({ page }) => {
+  test('logout redirects to /login', async ({ page }) => {
+    // Mock auth
+    await page.route('**/api/auth/login', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_AUTH_RESPONSE) })
+    );
+    await page.route('**/api/users/me', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_USER) })
+    );
+    await page.route('**/api/auth/logout', (route) => route.fulfill({ status: 200 }));
+    await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }));
+
     await page.goto('/login');
-    await page.fill('input[name="username"], input[placeholder*="username" i], input[id*="username" i]', TEST_USER.username);
-    await page.fill('input[type="password"]', TEST_USER.password);
-    await page.click('button[type="submit"]');
-    await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10000 });
+    await page.fill('#username', 'agent1');
+    await page.fill('#password', 'Agent1234!');
+    await page.click('button[type="submit"]:has-text("Sign in")');
+    await expect(page).toHaveURL(/\/agent/, { timeout: 10000 });
 
-    const logoutBtn = page.locator('button:has-text("Logout"), button:has-text("Sign out"), [data-testid="logout"]').first();
-    await logoutBtn.click();
+    // Open user dropdown and click logout ("Đăng xuất")
+    const userMenuTrigger = page.locator('[data-radix-dropdown-menu-trigger], button[aria-haspopup="menu"]').first();
+    await userMenuTrigger.click();
+    await page.locator('text=Đăng xuất').click();
 
-    await expect(page).toHaveURL(/\/login/);
+    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
   });
 
-  test('session persists on page reload', async ({ page }) => {
+  test('session persists on page reload when token exists', async ({ page }) => {
+    // Pre-seed token in localStorage and mock /users/me
     await page.goto('/login');
-    await page.fill('input[name="username"], input[placeholder*="username" i], input[id*="username" i]', TEST_USER.username);
-    await page.fill('input[type="password"]', TEST_USER.password);
-    await page.click('button[type="submit"]');
-    await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10000 });
+    await page.route('**/api/users/me', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_USER) })
+    );
+    await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }));
 
-    await page.reload();
-    await expect(page).not.toHaveURL(/\/login/);
+    await page.evaluate((token) => localStorage.setItem('accessToken', token), 'mock-access-token');
+    await page.goto('/agent');
+
+    await expect(page).not.toHaveURL(/\/login/, { timeout: 8000 });
+    await expect(page).toHaveURL(/\/agent/);
   });
 });

@@ -1,0 +1,302 @@
+// Mock Core Banking System adapter — per-CIF realistic data for seeded customers
+export interface CoreBankingAdapter {
+  queryProducts(cif: string): Promise<any[]>;
+  queryTransactions(cif: string, limit: number): Promise<any[]>;
+}
+
+const CIF_DATA: Record<string, { name: string; products: any[]; transactions: any[] }> = {
+  CIF001001: {
+    name: 'Nguyễn Văn An',
+    products: [
+      {
+        type: 'account',
+        accountNumber: '0021234567890',
+        productName: 'Tài khoản thanh toán VND',
+        accountType: 'Current Account',
+        balance: 125500000,
+        availableBalance: 125500000,
+        status: 'active',
+        currency: 'VND',
+        openedAt: new Date('2020-01-15'),
+        branch: 'Chi nhánh Hà Nội',
+      },
+      {
+        type: 'savings',
+        accountNumber: 'TK-2024-001',
+        productName: 'Tiết kiệm có kỳ hạn 12 tháng',
+        term: '12 tháng',
+        interestRate: 6.5,
+        principal: 200000000,
+        balance: 200000000,
+        status: 'active',
+        currency: 'VND',
+        maturityDate: new Date('2025-03-15'),
+        openedAt: new Date('2024-03-15'),
+        autoRenewal: true,
+      },
+      {
+        type: 'loan',
+        accountNumber: 'VL2024001234',
+        productName: 'Vay tiêu dùng cá nhân',
+        loanAmount: 300000000,
+        currentBalance: 250000000,
+        balance: -250000000,
+        interestRate: 12.5,
+        term: 36,
+        monthlyPayment: 8500000,
+        status: 'active',
+        currency: 'VND',
+        openedAt: new Date('2024-01-15'),
+        maturityDate: new Date('2027-01-15'),
+        nextPaymentDate: new Date('2025-04-15'),
+      },
+      {
+        type: 'card',
+        accountNumber: '4111111111111234',
+        productName: 'Visa Platinum',
+        cardType: 'Credit Card',
+        creditLimit: 50000000,
+        availableBalance: 35000000,
+        balance: -15000000,
+        status: 'active',
+        currency: 'VND',
+        openedAt: new Date('2023-03-15'),
+        maturityDate: new Date('2028-03-31'),
+        cardholderName: 'NGUYEN VAN AN',
+      },
+    ],
+    transactions: [
+      { amount: 5000000, type: 'credit', description: 'Nhận lương tháng 3/2026', accountNumber: '0021234567890' },
+      { amount: 1200000, type: 'debit', description: 'Thanh toán điện nước', accountNumber: '0021234567890' },
+      { amount: 500000, type: 'debit', description: 'Nạp tiền điện thoại', accountNumber: '0021234567890' },
+      { amount: 8500000, type: 'debit', description: 'Trả nợ vay tiêu dùng', accountNumber: 'VL2024001234' },
+      { amount: 3000000, type: 'debit', description: 'Chuyển khoản cho Trần Thị Bích', accountNumber: '0021234567890' },
+      { amount: 15000000, type: 'debit', description: 'Thanh toán thẻ tín dụng Visa', accountNumber: '0021234567890' },
+      { amount: 200000000, type: 'credit', description: 'Gửi tiết kiệm 12 tháng', accountNumber: 'TK-2024-001' },
+      { amount: 2500000, type: 'debit', description: 'Mua sắm online Shopee', accountNumber: '4111111111111234' },
+    ],
+  },
+  CIF001002: {
+    name: 'Trần Thị Bích',
+    products: [
+      {
+        type: 'account',
+        accountNumber: '0029876543210',
+        productName: 'Tài khoản thanh toán VND',
+        accountType: 'Current Account',
+        balance: 45200000,
+        availableBalance: 45200000,
+        status: 'active',
+        currency: 'VND',
+        openedAt: new Date('2019-05-20'),
+        branch: 'Chi nhánh TP.HCM',
+      },
+      {
+        type: 'savings',
+        accountNumber: 'TK-2023-045',
+        productName: 'Tiết kiệm không kỳ hạn',
+        term: 'Không kỳ hạn',
+        interestRate: 2.0,
+        principal: 50000000,
+        balance: 50000000,
+        status: 'active',
+        currency: 'VND',
+        openedAt: new Date('2023-08-10'),
+        autoRenewal: false,
+      },
+      {
+        type: 'card',
+        accountNumber: '5512345678905678',
+        productName: 'Mastercard Gold',
+        cardType: 'Credit Card',
+        creditLimit: 30000000,
+        availableBalance: 28000000,
+        balance: -2000000,
+        status: 'active',
+        currency: 'VND',
+        openedAt: new Date('2022-08-10'),
+        maturityDate: new Date('2027-08-31'),
+        cardholderName: 'TRAN THI BICH',
+      },
+    ],
+    transactions: [
+      { amount: 12000000, type: 'credit', description: 'Nhận lương tháng 3/2026', accountNumber: '0029876543210' },
+      { amount: 50000000, type: 'credit', description: 'Gửi tiết kiệm không kỳ hạn', accountNumber: 'TK-2023-045' },
+      { amount: 800000, type: 'debit', description: 'Thanh toán hóa đơn điện', accountNumber: '0029876543210' },
+      { amount: 2000000, type: 'debit', description: 'Thanh toán thẻ Mastercard', accountNumber: '0029876543210' },
+      { amount: 3000000, type: 'credit', description: 'Nhận chuyển khoản từ Nguyễn Văn An', accountNumber: '0029876543210' },
+    ],
+  },
+  CIF001003: {
+    name: 'Lê Văn Cường',
+    products: [
+      {
+        type: 'account',
+        accountNumber: '0035551234567',
+        productName: 'Tài khoản thanh toán VND',
+        accountType: 'Current Account',
+        balance: 8750000,
+        availableBalance: 8750000,
+        status: 'active',
+        currency: 'VND',
+        openedAt: new Date('2021-11-05'),
+        branch: 'Chi nhánh Đà Nẵng',
+      },
+      {
+        type: 'loan',
+        accountNumber: 'VL2023005678',
+        productName: 'Vay mua xe',
+        loanAmount: 280000000,
+        currentBalance: 180000000,
+        balance: -180000000,
+        interestRate: 9.8,
+        term: 48,
+        monthlyPayment: 6200000,
+        status: 'overdue',
+        currency: 'VND',
+        openedAt: new Date('2023-06-20'),
+        maturityDate: new Date('2027-06-20'),
+        nextPaymentDate: new Date('2025-03-05'),
+        overdueAmount: 6200000,
+        overdueDays: 10,
+      },
+    ],
+    transactions: [
+      { amount: 9500000, type: 'credit', description: 'Nhận lương tháng 3/2026', accountNumber: '0035551234567' },
+      { amount: 6200000, type: 'debit', description: 'Trả nợ vay mua xe (quá hạn)', accountNumber: 'VL2023005678' },
+      { amount: 500000, type: 'debit', description: 'Phí quá hạn', accountNumber: 'VL2023005678' },
+      { amount: 1500000, type: 'debit', description: 'Thanh toán dịch vụ internet', accountNumber: '0035551234567' },
+    ],
+  },
+  CIF001004: {
+    name: 'Phạm Thị Dung',
+    products: [
+      {
+        type: 'account',
+        accountNumber: '0044447890123',
+        productName: 'Tài khoản thanh toán VND',
+        accountType: 'Current Account',
+        balance: 320000000,
+        availableBalance: 320000000,
+        status: 'active',
+        currency: 'VND',
+        openedAt: new Date('2018-03-22'),
+        branch: 'Chi nhánh Hà Nội',
+      },
+      {
+        type: 'savings',
+        accountNumber: 'TK-2022-088',
+        productName: 'Tiết kiệm có kỳ hạn 6 tháng',
+        term: '6 tháng',
+        interestRate: 5.8,
+        principal: 500000000,
+        balance: 500000000,
+        status: 'active',
+        currency: 'VND',
+        maturityDate: new Date('2026-06-22'),
+        openedAt: new Date('2025-12-22'),
+        autoRenewal: true,
+      },
+      {
+        type: 'card',
+        accountNumber: '4012888888881881',
+        productName: 'Visa Signature',
+        cardType: 'Credit Card',
+        creditLimit: 100000000,
+        availableBalance: 82000000,
+        balance: -18000000,
+        status: 'active',
+        currency: 'VND',
+        openedAt: new Date('2021-07-01'),
+        maturityDate: new Date('2026-07-31'),
+        cardholderName: 'PHAM THI DUNG',
+      },
+    ],
+    transactions: [
+      { amount: 25000000, type: 'credit', description: 'Nhận lương + thưởng tháng 3/2026', accountNumber: '0044447890123' },
+      { amount: 500000000, type: 'debit', description: 'Gửi tiết kiệm 6 tháng', accountNumber: 'TK-2022-088' },
+      { amount: 18000000, type: 'debit', description: 'Thanh toán thẻ Visa Signature', accountNumber: '0044447890123' },
+      { amount: 5000000, type: 'debit', description: 'Chuyển khoản gia đình', accountNumber: '0044447890123' },
+    ],
+  },
+  CIF001005: {
+    name: 'Hoàng Văn Em',
+    products: [
+      {
+        type: 'account',
+        accountNumber: '0056669012345',
+        productName: 'Tài khoản thanh toán VND',
+        accountType: 'Current Account',
+        balance: 15300000,
+        availableBalance: 15300000,
+        status: 'active',
+        currency: 'VND',
+        openedAt: new Date('2022-09-14'),
+        branch: 'Chi nhánh Hải Phòng',
+      },
+      {
+        type: 'loan',
+        accountNumber: 'VL2025009012',
+        productName: 'Vay mua nhà',
+        loanAmount: 1500000000,
+        currentBalance: 1450000000,
+        balance: -1450000000,
+        interestRate: 8.5,
+        term: 240,
+        monthlyPayment: 13200000,
+        status: 'active',
+        currency: 'VND',
+        openedAt: new Date('2025-01-10'),
+        maturityDate: new Date('2045-01-10'),
+        nextPaymentDate: new Date('2026-04-10'),
+      },
+    ],
+    transactions: [
+      { amount: 18000000, type: 'credit', description: 'Nhận lương tháng 3/2026', accountNumber: '0056669012345' },
+      { amount: 13200000, type: 'debit', description: 'Trả góp vay mua nhà', accountNumber: 'VL2025009012' },
+      { amount: 2000000, type: 'debit', description: 'Thanh toán bảo hiểm nhân thọ', accountNumber: '0056669012345' },
+      { amount: 1500000, type: 'debit', description: 'Thanh toán dịch vụ sinh hoạt', accountNumber: '0056669012345' },
+    ],
+  },
+};
+
+// Default data for unknown CIFs
+function getDefaultProducts(cif: string): any[] {
+  return [
+    {
+      type: 'account',
+      accountNumber: '0001111111111',
+      productName: 'Tài khoản thanh toán VND',
+      accountType: 'Current Account',
+      balance: 10000000,
+      availableBalance: 10000000,
+      status: 'active',
+      currency: 'VND',
+      openedAt: new Date('2023-01-01'),
+      branch: 'Chi nhánh TPBank',
+    },
+  ];
+}
+
+export class MockCoreBankingAdapter implements CoreBankingAdapter {
+  async queryProducts(cif: string): Promise<any[]> {
+    await new Promise(resolve => setTimeout(resolve, 50));
+    return CIF_DATA[cif]?.products ?? getDefaultProducts(cif);
+  }
+
+  async queryTransactions(cif: string, limit: number): Promise<any[]> {
+    await new Promise(resolve => setTimeout(resolve, 50));
+    const txns = CIF_DATA[cif]?.transactions ?? [];
+    const result = txns.slice(0, limit).map((t, i) => ({
+      id: `${cif}-TXN-${String(i + 1).padStart(4, '0')}`,
+      amount: t.amount,
+      type: t.type,
+      description: t.description,
+      accountNumber: t.accountNumber,
+      currency: 'VND',
+      balance: null,
+      timestamp: new Date(Date.now() - i * 86400000 * 2),
+    }));
+    return result;
+  }
+}

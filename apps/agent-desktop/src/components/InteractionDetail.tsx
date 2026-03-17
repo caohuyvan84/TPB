@@ -21,8 +21,10 @@ import { ChatSessionHeader } from './ChatSessionHeader';
 import { SLAStatus } from './ChatSLABadge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
-import { 
-  Phone, 
+import { useCreateTicket } from '../hooks/useTickets';
+import { toast } from 'sonner';
+import {
+  Phone,
   PhoneOff, 
   Mic, 
   MicOff, 
@@ -568,8 +570,82 @@ SĐT: 0987 654 321`,
         }
       };
 
-    default:
-      return null;
+    default: {
+      // Build email data from real API interaction metadata
+      const meta = interaction?.metadata || {};
+      if (!meta.from && !meta.body) return null;
+
+      const isThread = meta.type === 'thread' && Array.isArray(meta.threadReplies) && meta.threadReplies.length > 0;
+
+      if (isThread) {
+        // Build thread messages: original email + replies
+        const threadMessages = [
+          {
+            id: `${interaction.id}-original`,
+            from: { name: meta.fromName || meta.from, email: meta.from, avatar: '👤' },
+            to: [{ name: meta.toName || meta.to, email: meta.to }],
+            cc: meta.cc ? [{ name: meta.cc, email: meta.cc }] : [],
+            subject: meta.subject || interaction.subject,
+            date: meta.date || interaction.createdAt?.substring(0, 10),
+            time: meta.time || '09:00',
+            content: meta.body || '',
+            attachments: (meta.attachments || []).map((a: any) => ({
+              id: a.id, name: a.name, size: a.size, type: a.type,
+              downloadUrl: '#', previewUrl: '#'
+            })),
+            direction: 'received'
+          },
+          ...(meta.threadReplies || []).map((reply: any) => ({
+            id: reply.id,
+            from: { name: reply.from, email: reply.fromEmail, avatar: reply.direction === 'sent' ? '👩‍💼' : '👤' },
+            to: [{ name: reply.to, email: reply.to }],
+            cc: [],
+            subject: reply.subject,
+            date: reply.date,
+            time: reply.time,
+            content: reply.body,
+            attachments: [],
+            direction: reply.direction,
+            isLatest: false
+          }))
+        ];
+        // Mark last message as latest
+        if (threadMessages.length > 0) {
+          (threadMessages[threadMessages.length - 1] as any).isLatest = true;
+        }
+
+        return {
+          type: 'thread',
+          isSpam: meta.isSpam || false,
+          isStarred: meta.isStarred || false,
+          isImportant: meta.isImportant || false,
+          labels: meta.labels || [],
+          threadMessages
+        };
+      }
+
+      // Single inbound email
+      return {
+        type: 'inbound',
+        direction: 'received',
+        isSpam: meta.isSpam || false,
+        isStarred: meta.isStarred || false,
+        isImportant: meta.isImportant || false,
+        labels: meta.labels || [],
+        from: { name: meta.fromName || meta.from, email: meta.from, avatar: '👤' },
+        to: [{ name: meta.toName || meta.to, email: meta.to }],
+        cc: meta.cc ? [{ name: meta.cc, email: meta.cc }] : [],
+        subject: meta.subject || interaction?.subject || '',
+        date: meta.date || interaction?.createdAt?.substring(0, 10),
+        time: meta.time || '09:00',
+        content: meta.body || '',
+        attachments: (meta.attachments || []).map((a: any) => ({
+          id: a.id, name: a.name, size: a.size, type: a.type,
+          downloadUrl: '#', previewUrl: '#'
+        })),
+        securityInfo: { encrypted: false, signature: false }
+      };
+    }
   }
 };
 
@@ -593,6 +669,7 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
   // Ticket states
   const [ticketViewMode, setTicketViewMode] = useState<'create' | 'view'>('create');
   const [savedTicket, setSavedTicket] = useState<any>(null);
+  const createTicket = useCreateTicket();
 
   // Reset customer selection when interaction changes
   useEffect(() => {
@@ -1197,66 +1274,39 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
     }
   };
 
-  const handleSaveTicket = () => {
-    const newTicket = {
-      id: `TKT-${Date.now().toString().substr(-3)}`,
-      number: `TKT-${Date.now().toString().substr(-3)}`,
-      classification: ticketData.classification,
-      classificationLabel: getClassificationLabel(ticketData.classification),
-      title: ticketData.title,
-      titleLabel: getTitleLabel(ticketData.classification, ticketData.title),
-      description: ticketData.description,
-      status: ticketData.status as 'new' | 'in-progress' | 'resolved' | 'closed',
-      priority: ticketData.priority as 'low' | 'medium' | 'high' | 'urgent',
-      customer: {
-        name: interaction?.customerName,
-        email: interaction?.customerEmail,
-        phone: interaction?.customerPhone || '+84 123 456 789',
-        isVIP: false
-      },
-      assignedAgent: ticketData.assignedAgent 
-        ? agents.find(a => a.id === ticketData.assignedAgent)?.name || 'Agent Tung'
-        : ticketData.assignedTeam 
-        ? teams.find(t => t.id === ticketData.assignedTeam)?.name || 'Unassigned Team'
-        : 'Agent Tung',
-      assignedBy: 'Agent Tung',
-      assignedTeam: ticketData.assignedTeam || null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      dueDate: new Date(ticketData.dueDate),
-      tags: [ticketData.category?.toLowerCase().replace(/\\s+/g, '-'), interaction?.type],
-      comments: [
-        {
-          id: 'comment-initial',
-          author: 'Agent Tung',
-          content: `Ticket được tạo từ tương tác ${interaction?.type} với khách hàng.\\n\\n${ticketData.description}`,
-          timestamp: new Date(),
-          type: 'comment' as const,
-          isInternal: false
-        }
-      ],
-      interactionId: interaction?.id,
-      source: `From ${interaction?.type} Interaction`
-    };
-
-    console.log('Saving ticket:', newTicket);
-    
-    // Call parent callback to update ticket list
-    if (onCreateTicket) {
-      onCreateTicket(newTicket);
+  const handleSaveTicket = async () => {
+    if (!ticketData.title.trim()) {
+      toast.error('Vui lòng nhập tiêu đề ticket');
+      return;
     }
-    
-    // Save ticket and switch to view mode
-    setSavedTicket(newTicket);
-    setTicketViewMode('view');
-    
-    // Show success message
-    setTimeout(() => {
-      const message = savedTicket ? 
-        'Ticket đã được cập nhật thành công!' : 
-        'Ticket đã được lưu thành công và liên kết với khách hàng!';
-      alert(message);
-    }, 100);
+
+    const customerId = interaction?.customerId as string | undefined;
+    if (!customerId) {
+      toast.error('Không xác định được khách hàng cho ticket này');
+      return;
+    }
+
+    try {
+      const result = await createTicket.mutateAsync({
+        title: ticketData.title,
+        description: ticketData.description,
+        priority: ticketData.priority,
+        category: ticketData.category || undefined,
+        customerId,
+        interactionId: interaction?.id,
+      });
+
+      const savedResult = { ...result, number: result.displayId };
+      setSavedTicket(savedResult);
+      setTicketViewMode('view');
+
+      if (onCreateTicket) {
+        onCreateTicket(savedResult);
+      }
+    } catch (error) {
+      // Error toast already shown by useCreateTicket onError
+      console.error('Failed to save ticket:', error);
+    }
   };
 
   const handleEmailReply = (mode: 'reply' | 'forward') => {
@@ -2925,9 +2975,9 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
                         )}
                       </div>
                       
-                      <Button onClick={handleSaveTicket} className="w-full" size="default">
+                      <Button onClick={handleSaveTicket} className="w-full" size="default" disabled={createTicket.isPending}>
                         <Save className="h-4 w-4 mr-2" />
-                        Lưu Ticket
+                        {createTicket.isPending ? 'Đang lưu...' : 'Lưu Ticket'}
                       </Button>
                       </div>
                     </div>

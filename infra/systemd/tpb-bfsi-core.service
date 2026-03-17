@@ -1,0 +1,18 @@
+[Unit]
+Description=TPB Bfsi-core Service
+After=network.target postgresql.service redis.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/project/AgentdesktopTPB
+Environment="NODE_ENV=production"
+Environment="PORT=3008"
+ExecStart=/usr/bin/npx nx run bfsi-core-service:serve
+Restart=always
+RestartSec=10
+StandardOutput=append:/opt/project/AgentdesktopTPB/logs/bfsi-core-service.log
+StandardError=append:/opt/project/AgentdesktopTPB/logs/bfsi-core-service.log
+
+[Install]
+WantedBy=multi-user.target

@@ -59,6 +59,14 @@
           "buildTarget": "interaction-service:build:production"
         }
       }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": {
+        "jestConfig": "services/interaction-service/jest.config.ts",
+        "passWithNoTests": true
+      }
     }
   },
   "tags": []

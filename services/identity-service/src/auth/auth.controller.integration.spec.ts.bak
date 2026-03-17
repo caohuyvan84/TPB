@@ -1,0 +1,200 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
+import * as request from 'supertest';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+
+describe('AuthController Integration Tests', () => {
+  let app: INestApplication;
+  let authService: jest.Mocked<AuthService>;
+
+  const mockAuthService = {
+    login: jest.fn(),
+    refreshTokens: jest.fn(),
+    logout: jest.fn(),
+    setupMfa: jest.fn(),
+    verifyMfa: jest.fn(),
+    getUserSessions: jest.fn(),
+  };
+
+  beforeAll(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      controllers: [AuthController],
+      providers: [
+        {
+          provide: AuthService,
+          useValue: mockAuthService,
+        },
+      ],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    await app.init();
+
+    authService = moduleFixture.get(AuthService);
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('POST /auth/login', () => {
+    it('should return tokens on successful login', () => {
+      const loginResponse = {
+        accessToken: 'access_token',
+        refreshToken: 'refresh_token',
+        expiresIn: 900,
+        tokenType: 'Bearer',
+        user: {
+          id: 'user-id',
+          agentId: 'AGT001',
+          fullName: 'Test User',
+          roles: ['agent'],
+          permissions: ['read:interactions:own'],
+        },
+      };
+
+      authService.login.mockResolvedValue(loginResponse);
+
+      return request(app.getHttpServer())
+        .post('/auth/login')
+        .send({
+          username: 'testuser',
+          password: 'Password123!',
+        })
+        .expect(200)
+        .expect((res) => {
+          expect(res.body).toEqual(loginResponse);
+        });
+    });
+
+    it('should return 400 with missing username', () => {
+      return request(app.getHttpServer())
+        .post('/auth/login')
+        .send({
+          password: 'Password123!',
+        })
+        .expect(400);
+    });
+
+    it('should return 400 with missing password', () => {
+      return request(app.getHttpServer())
+        .post('/auth/login')
+        .send({
+          username: 'testuser',
+        })
+        .expect(400);
+    });
+  });
+
+  describe('POST /auth/refresh', () => {
+    it('should return new tokens', () => {
+      const refreshResponse = {
+        accessToken: 'new_access_token',
+        refreshToken: 'new_refresh_token',
+        expiresIn: 900,
+        tokenType: 'Bearer',
+        user: {
+          id: 'user-id',
+          agentId: 'AGT001',
+          fullName: 'Test User',
+          roles: ['agent'],
+          permissions: ['read:interactions:own'],
+        },
+      };
+
+      authService.refreshTokens.mockResolvedValue(refreshResponse);
+
+      return request(app.getHttpServer())
+        .post('/auth/refresh')
+        .send({
+          refreshToken: 'old_refresh_token',
+        })
+        .expect(200)
+        .expect((res) => {
+          expect(res.body).toEqual(refreshResponse);
+        });
+    });
+
+    it('should return 400 with missing refresh token', () => {
+      return request(app.getHttpServer())
+        .post('/auth/refresh')
+        .send({})
+        .expect(400);
+    });
+  });
+
+  describe('POST /auth/logout', () => {
+    it('should logout successfully', () => {
+      authService.logout.mockResolvedValue(undefined);
+
+      return request(app.getHttpServer())
+        .post('/auth/logout')
+        .send({
+          refreshToken: 'refresh_token',
+        })
+        .expect(204);
+    });
+
+    it('should return 400 with missing refresh token', () => {
+      return request(app.getHttpServer())
+        .post('/auth/logout')
+        .send({})
+        .expect(400);
+    });
+  });
+
+  describe('POST /auth/mfa/verify', () => {
+    it('should verify MFA and return tokens', () => {
+      const verifyResponse = {
+        accessToken: 'access_token',
+        refreshToken: 'refresh_token',
+        expiresIn: 900,
+        tokenType: 'Bearer',
+        user: {
+          id: 'user-id',
+          agentId: 'AGT001',
+          fullName: 'Test User',
+          roles: ['agent'],
+          permissions: ['read:interactions:own'],
+        },
+      };
+
+      authService.verifyMfa.mockResolvedValue(verifyResponse);
+
+      return request(app.getHttpServer())
+        .post('/auth/mfa/verify')
+        .send({
+          token: 'mfa_token',
+          code: '123456',
+        })
+        .expect(200)
+        .expect((res) => {
+          expect(res.body).toEqual(verifyResponse);
+        });
+    });
+
+    it('should return 400 with missing token', () => {
+      return request(app.getHttpServer())
+        .post('/auth/mfa/verify')
+        .send({
+          code: '123456',
+        })
+        .expect(400);
+    });
+
+    it('should return 400 with missing code', () => {
+      return request(app.getHttpServer())
+        .post('/auth/mfa/verify')
+        .send({
+          token: 'mfa_token',
+        })
+        .expect(400);
+    });
+  });
+});

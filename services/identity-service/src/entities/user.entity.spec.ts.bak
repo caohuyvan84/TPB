@@ -1,0 +1,201 @@
+import { DataSource, Repository } from 'typeorm';
+import { User } from './user.entity';
+import { Role } from './role.entity';
+import { createTestDataSource } from './test-data-source';
+
+describe('User Entity', () => {
+  let dataSource: DataSource;
+  let userRepository: Repository<User>;
+  let roleRepository: Repository<Role>;
+
+  beforeAll(async () => {
+    dataSource = await createTestDataSource();
+    userRepository = dataSource.getRepository(User);
+    roleRepository = dataSource.getRepository(Role);
+  });
+
+  afterAll(async () => {
+    await dataSource.destroy();
+  });
+
+  beforeEach(async () => {
+    await userRepository.query('TRUNCATE TABLE users RESTART IDENTITY CASCADE');
+    await roleRepository.query('TRUNCATE TABLE roles RESTART IDENTITY CASCADE');
+  });
+
+  describe('Entity Creation', () => {
+    it('should create a user with required fields', async () => {
+      const user = userRepository.create({
+        username: 'testuser',
+        email: 'test@example.com',
+        fullName: 'Test User',
+        passwordHash: '$2b$12$hashed_password',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      const savedUser = await userRepository.save(user);
+
+      expect(savedUser.id).toBeDefined();
+      expect(savedUser.username).toBe('testuser');
+      expect(savedUser.email).toBe('test@example.com');
+      expect(savedUser.fullName).toBe('Test User');
+      expect(savedUser.isActive).toBe(true);
+      expect(savedUser.mfaEnabled).toBe(false);
+      expect(savedUser.failedLoginAttempts).toBe(0);
+      expect(savedUser.createdAt).toBeInstanceOf(Date);
+      expect(savedUser.updatedAt).toBeInstanceOf(Date);
+    });
+
+    it('should have default values for optional fields', async () => {
+      const user = userRepository.create({
+        username: 'defaultuser',
+        email: 'default@example.com',
+        fullName: 'Default User',
+        passwordHash: '$2b$12$hashed',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      const savedUser = await userRepository.save(user);
+
+      expect(savedUser.isActive).toBe(true);
+      expect(savedUser.mfaEnabled).toBe(false);
+      expect(savedUser.failedLoginAttempts).toBe(0);
+      expect(savedUser.agentId).toBeNull();
+      expect(savedUser.mfaSecret).toBeNull();
+      expect(savedUser.lastLoginAt).toBeNull();
+      expect(savedUser.lockedUntil).toBeNull();
+    });
+  });
+
+  describe('Constraints', () => {
+    it('should enforce unique username', async () => {
+      const user1 = userRepository.create({
+        username: 'duplicate',
+        email: 'user1@example.com',
+        fullName: 'User 1',
+        passwordHash: '$2b$12$hash1',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+      await userRepository.save(user1);
+
+      const user2 = userRepository.create({
+        username: 'duplicate',
+        email: 'user2@example.com',
+        fullName: 'User 2',
+        passwordHash: '$2b$12$hash2',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      await expect(userRepository.save(user2)).rejects.toThrow();
+    });
+
+    it('should enforce unique email', async () => {
+      const user1 = userRepository.create({
+        username: 'user1',
+        email: 'duplicate@example.com',
+        fullName: 'User 1',
+        passwordHash: '$2b$12$hash1',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+      await userRepository.save(user1);
+
+      const user2 = userRepository.create({
+        username: 'user2',
+        email: 'duplicate@example.com',
+        fullName: 'User 2',
+        passwordHash: '$2b$12$hash2',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      await expect(userRepository.save(user2)).rejects.toThrow();
+    });
+  });
+
+  describe('Relationships', () => {
+    it('should support many-to-many relationship with roles', async () => {
+      const role1 = roleRepository.create({
+        name: 'agent',
+        description: 'Agent role',
+        permissions: ['read:interactions'],
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+      const role2 = roleRepository.create({
+        name: 'supervisor',
+        description: 'Supervisor role',
+        permissions: ['read:interactions', 'manage:agents'],
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+      await roleRepository.save([role1, role2]);
+
+      const user = userRepository.create({
+        username: 'multiuser',
+        email: 'multi@example.com',
+        fullName: 'Multi Role User',
+        passwordHash: '$2b$12$hash',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+        roles: [role1, role2],
+      });
+      await userRepository.save(user);
+
+      const foundUser = await userRepository.findOne({
+        where: { username: 'multiuser' },
+        relations: ['roles'],
+      });
+
+      expect(foundUser?.roles).toHaveLength(2);
+      expect(foundUser?.roles.map(r => r.name)).toContain('agent');
+      expect(foundUser?.roles.map(r => r.name)).toContain('supervisor');
+    });
+  });
+
+  describe('Account Locking', () => {
+    it('should track failed login attempts', async () => {
+      const user = userRepository.create({
+        username: 'locktest',
+        email: 'lock@example.com',
+        fullName: 'Lock Test',
+        passwordHash: '$2b$12$hash',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+        failedLoginAttempts: 3,
+      });
+      const savedUser = await userRepository.save(user);
+
+      expect(savedUser.failedLoginAttempts).toBe(3);
+    });
+
+    it('should set locked_until timestamp', async () => {
+      const lockUntil = new Date(Date.now() + 15 * 60 * 1000);
+      const user = userRepository.create({
+        username: 'locked',
+        email: 'locked@example.com',
+        fullName: 'Locked User',
+        passwordHash: '$2b$12$hash',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+        failedLoginAttempts: 5,
+        lockedUntil: lockUntil,
+      });
+      const savedUser = await userRepository.save(user);
+
+      expect(savedUser.lockedUntil).toBeInstanceOf(Date);
+      expect(savedUser.lockedUntil?.getTime()).toBeCloseTo(lockUntil.getTime(), -3);
+    });
+  });
+
+  describe('MFA Support', () => {
+    it('should store MFA secret when enabled', async () => {
+      const user = userRepository.create({
+        username: 'mfauser',
+        email: 'mfa@example.com',
+        fullName: 'MFA User',
+        passwordHash: '$2b$12$hash',
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+        mfaEnabled: true,
+        mfaSecret: 'JBSWY3DPEHPK3PXP',
+      });
+      const savedUser = await userRepository.save(user);
+
+      expect(savedUser.mfaEnabled).toBe(true);
+      expect(savedUser.mfaSecret).toBe('JBSWY3DPEHPK3PXP');
+    });
+  });
+});

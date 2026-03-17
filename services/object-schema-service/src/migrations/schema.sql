@@ -1,0 +1,40 @@
+CREATE TABLE IF NOT EXISTS object_types (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL,
+  name VARCHAR UNIQUE NOT NULL,
+  display_name VARCHAR NOT NULL,
+  display_name_plural VARCHAR NOT NULL,
+  icon VARCHAR,
+  version INTEGER DEFAULT 1,
+  is_system BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS field_definitions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  object_type_id UUID NOT NULL,
+  name VARCHAR NOT NULL,
+  display_name VARCHAR NOT NULL,
+  field_type VARCHAR NOT NULL,
+  data_source VARCHAR DEFAULT 'local',
+  enrichment_source_id UUID,
+  is_required BOOLEAN DEFAULT false,
+  is_read_only BOOLEAN DEFAULT false,
+  is_searchable BOOLEAN DEFAULT false,
+  is_sortable BOOLEAN DEFAULT false,
+  is_filterable BOOLEAN DEFAULT false,
+  is_sensitive BOOLEAN DEFAULT false,
+  is_unique BOOLEAN DEFAULT false,
+  default_value JSONB,
+  validation_rules JSONB DEFAULT '[]',
+  display_config JSONB DEFAULT '{}',
+  sort_order INTEGER DEFAULT 0,
+  group_name VARCHAR,
+  is_core BOOLEAN DEFAULT false,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (object_type_id, name),
+  FOREIGN KEY (object_type_id) REFERENCES object_types(id) ON DELETE CASCADE
+);

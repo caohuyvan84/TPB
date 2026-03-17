@@ -4,30 +4,30 @@ import { User } from './user.entity';
 @Entity('refresh_tokens')
 export class RefreshToken {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   @Column({ name: 'user_id', type: 'uuid' })
-  userId: string;
+  userId!: string;
 
   @Column({ name: 'token_hash' })
-  tokenHash: string;
+  tokenHash!: string;
 
   @Column({ name: 'ip_address', type: 'inet', nullable: true })
-  ipAddress: string;
+  ipAddress?: string;
 
   @Column({ name: 'user_agent', type: 'text', nullable: true })
-  userAgent: string;
+  userAgent?: string;
 
   @Column({ name: 'expires_at', type: 'timestamptz' })
-  expiresAt: Date;
+  expiresAt!: Date;
 
   @Column({ default: false })
-  revoked: boolean;
+  revoked!: boolean;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
-  createdAt: Date;
+  createdAt!: Date;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })
-  user: User;
+  user!: User;
 }

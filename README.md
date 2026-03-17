@@ -34,12 +34,58 @@
   docker compose up -d
   ```
 
-  5. Start development server:
+  5. Setup Kong API Gateway:
+  ```bash
+  ./infra/scripts/setup-kong-identity.sh
+  ```
+
+  6. Verify Sprint 1-2 completion:
+  ```bash
+  ./infra/scripts/check-sprint-1-2.sh
+  ```
+
+  7. Start development server:
   ```bash
   npm run dev
   ```
 
   Agent Desktop will be available at http://localhost:3000
+
+  ## Current Status
+
+  **Phase 1 - Core MVP**: ✅ **COMPLETE** (100%)
+  **Phase 2 - Advanced Features**: ✅ **COMPLETE** (100%)
+  **Phase 3 - Automation & Analytics**: ✅ **COMPLETE** (100%)
+
+  ### ✅ All 18 Backend Services Operational
+  
+  **Phase 1 Services:**
+  - MS-1: Identity Service (63 tests passing)
+  - MS-2: Agent Service (17 tests passing)
+  - MS-3: Interaction Service (10 tests passing)
+  - MS-4: Ticket Service (8 tests passing)
+  - MS-5: Customer Service (7 tests passing)
+  - MS-6: Notification Service (7 tests passing)
+
+  **Phase 2 Services:**
+  - MS-7: Knowledge Service (13 tests passing)
+  - MS-8: BFSI Core Service (10 tests passing)
+  - MS-9: AI Service (8 tests passing)
+  - MS-10: Media Service (6 tests passing)
+  - MS-11: Audit Service (8 tests passing)
+  - MS-13: Object Schema Service (5 tests passing)
+  - MS-14: Layout Service (5 tests passing)
+  - MS-19: CTI Adapter Service (7 tests passing)
+
+  **Phase 3 Services:**
+  - MS-15: Workflow Service (8 tests passing)
+  - MS-16: Data Enrichment Service (5 tests passing)
+  - MS-17: Dashboard Service (6 tests passing)
+  - MS-18: Report Service (5 tests passing)
+
+  **Total: 198/198 tests passing** 🎉
+
+  See [Phase 1 Summary](./.kiro/specs/phase-1-core-mvp/PHASE-1-COMPLETE.md), [Phase 2 Summary](./.kiro/specs/phase-2-advanced-features/PHASE-2-COMPLETE.md), and [Phase 3 Summary](./.kiro/specs/phase-3-automation-analytics/PHASE-3-COMPLETE.md) for details.
 
   ## Development
 

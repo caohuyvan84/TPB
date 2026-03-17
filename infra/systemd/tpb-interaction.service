@@ -1,0 +1,18 @@
+[Unit]
+Description=TPB Interaction Service
+After=network.target postgresql.service redis.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/project/AgentdesktopTPB
+Environment="NODE_ENV=production"
+Environment="PORT=3003"
+ExecStart=/usr/bin/npx nx run interaction-service:serve
+Restart=always
+RestartSec=10
+StandardOutput=append:/opt/project/AgentdesktopTPB/logs/interaction-service.log
+StandardError=append:/opt/project/AgentdesktopTPB/logs/interaction-service.log
+
+[Install]
+WantedBy=multi-user.target

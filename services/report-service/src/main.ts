@@ -4,8 +4,7 @@ import { AppModule } from './app/app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const globalPrefix = 'api';
-  app.setGlobalPrefix(globalPrefix);
+  app.setGlobalPrefix('api/v1');
   
   app.useGlobalPipes(
     new ValidationPipe({
@@ -22,7 +21,7 @@ async function bootstrap() {
   const port = process.env.PORT || 3018;
   await app.listen(port);
   
-  Logger.log(`🚀 report-service is running on: http://localhost:\${port}/\${globalPrefix}`);
+  Logger.log(`🚀 Report Service running on: http://localhost:${port}/api/v1`);
 }
 
 bootstrap();
