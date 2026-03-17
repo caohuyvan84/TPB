@@ -742,7 +742,7 @@ All Redis keys used by GoACD, consolidated in one place for implementation refer
 │    extension           = "1007"                                         │
 │    sip_registered      = "1"|"0"                                        │
 │    sip_last_register   = 1710000000              (unix timestamp)       │
-│    fs_instance         = "freeswitch-1"                                 │
+│    fs_instance         = "nextgenvoice01.omicx.vn"                                 │
 │    last_state_change   = 1710000000                                     │
 │    last_call_ended     = 1710000000              (for idle time calc)   │
 │    miss_count          = 0                       (consecutive misses)   │

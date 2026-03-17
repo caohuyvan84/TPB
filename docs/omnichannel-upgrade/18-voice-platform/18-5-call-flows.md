@@ -720,12 +720,12 @@ GoACD receives transfer request: agent-007 (FS-1) → agent-003 (FS-2)
 ```go
 // GoACD maintains agent→FS mapping based on SIP registration
 // When sofia::register event arrives for ext 1007 on FS-1:
-//   agentRegistry[agent-007].FSHost = "freeswitch-1"
+//   agentRegistry[agent-007].FSHost = "nextgenvoice01.omicx.vn"
 //   agentRegistry[agent-007].Extension = "1007"
 
 func (r *AgentRegistry) GetFSInstance(agentID string) string {
     agent := r.agents[agentID]
-    return agent.FSHost // "freeswitch-1" or "freeswitch-2"
+    return agent.FSHost // "nextgenvoice01.omicx.vn" or "nextgenvoice02.omicx.vn"
 }
 
 func (d *Delivery) isLocalTransfer(fromAgent, toAgent string) bool {

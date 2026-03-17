@@ -7,6 +7,13 @@
 
 ---
 
+## Active Implementation Plan
+
+> **[VOICE-IMPLEMENTATION-PLAN.md](./VOICE-IMPLEMENTATION-PLAN.md)** — Kế hoạch triển khai Voice Channel (12 tuần, 6 sprint)
+> Ưu tiên #1: Hoàn thiện kênh voice end-to-end (hạ tầng + backend + GoACD + frontend WebRTC)
+
+---
+
 ## Quick Find
 
 | Looking for... | Go to |

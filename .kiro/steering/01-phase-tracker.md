@@ -4,8 +4,8 @@ inclusion: always
 
 # Phase Tracker - TPB CRM Platform
 
-**Last Updated:** 2026-03-09
-**Current Phase:** Phase 2 - Advanced Features
+**Last Updated:** 2026-03-18
+**Current Phase:** Voice Channel Implementation — Sprint 1 (Infrastructure)
 
 ## 📊 Overall Progress
 
@@ -467,6 +467,88 @@ inclusion: always
 **Total: 24 tests passing, 4 services operational**
 
 **Blockers:** None
+
+---
+
+---
+
+## 🎯 Voice Channel Implementation (ACTIVE — Sprint 1 of 6)
+
+**Goal:** End-to-end voice channel: PSTN → Kamailio → FreeSWITCH → GoACD → Agent Desktop (WebRTC)
+**Plan file:** `docs/omnichannel-upgrade/VOICE-IMPLEMENTATION-PLAN.md`
+**Architecture:** `docs/omnichannel-upgrade/18-voice-platform/README.md`
+**Status:** 🟡 In Progress — Sprint 1: Foundation (Infrastructure)
+
+### Infrastructure (servers)
+| Server | IP | Role |
+|---|---|---|
+| nextgen.omicx.vn | 157.66.80.51 | Kamailio SIP proxy (native install), rtpengine, coturn |
+| nextgenvoice01.omicx.vn | 103.149.28.55 | FreeSWITCH node 1 (Docker) |
+| nextgenvoice02.omicx.vn | 103.149.28.56 | FreeSWITCH node 2 (Docker) |
+
+**SSH:** `sshpass -p 'QMFlqyr@n6t3' ssh root@<IP>`
+**FS password:** `TestVoice2026!`  **Kamailio DB:** `kamailio:KamDB_Pass2026!@localhost/kamailio`
+
+⚠️ **Quan trọng:** UDP bị block giữa 103.149.28.x ↔ 157.66.80.x (cloud-level stateful firewall). Dùng TCP transport cho tất cả SIP giữa Kamailio và FreeSWITCH (`sip:IP:5080;transport=tcp`).
+
+### Sprint 1 — Foundation Progress
+
+| Task | Status | Ghi chú |
+|---|---|---|
+| S1.1 Kamailio + FreeSWITCH deploy | ✅ Done | Kamailio 5.6.3 native, FS 1.10.12 Docker |
+| S1.2 Kamailio dispatcher → FS pool | ✅ Done | FLAGS: AP (Active+Probing) cả 2 node, TCP transport |
+| S1.3 FreeSWITCH config (ESL, SIP profile, ACL) | ✅ Done | port 5080 SIP, 8021 ESL, ACL kamailio_acl |
+| S1.4 rtpengine (SRTP↔RTP relay) | ✅ Done | Docker healthy, listen-ng 127.0.0.1:22222, RTP 20000-30000, integrated vào Kamailio |
+| S1.5 coturn (STUN/TURN for WebRTC) | ✅ Done | Docker healthy, port 3478/5349, secret `466f03791a44b531c5129724e50af31a4043e69bdccc741d`, realm `turn.nextgen.omicx.vn` |
+| S1.6 Kafka shared module | ✅ Done | `libs/kafka/` — KafkaModule (global), ProducerService, ConsumerService, event interfaces, 14 topics |
+| S1.7 Redis Agent State module | ✅ Done | `libs/redis-state/` — RedisStateModule (global), AgentStateService, Lua scripts (claim/release) |
+| S1.8 Channel Gateway scaffold (MS-20) | ✅ Done | `services/channel-gateway/` — port 3020, IChannelAdapter interface, AdapterRegistryService, ChannelConfig entity |
+| S1.9 Routing Engine scaffold (MS-21) | ✅ Done | `services/routing-engine/` — port 3021, RoutingQueue + RoutingRule entities, RoutingController scaffold |
+
+**Sprint 1 completion: 9/9 tasks (100%) ✅ COMPLETE**
+
+### Sprint 2 — Core Backend Progress
+
+| Task | Status | Ghi chú |
+|---|---|---|
+| S2.1 Agent Service → Redis state | ✅ Done | login/logout/heartbeat sync Redis, getChannelStatuses reads Redis first |
+| S2.2 AgentGroup + SkillDefinition entities, CRUD | ✅ Done | entities + groups/skills CRUD endpoints |
+| S2.3 Capacity tracking | ✅ Done | Via AgentStateService claim/release (Lua scripts) |
+| S2.4 Agent Kafka events | ✅ Done | agent.login/logout/status_changed/created published |
+| S2.5 Interaction createInteraction + transfer + timeline + pagination | ✅ Done | POST /interactions, POST /:id/transfer, GET /:id/timeline, cursor pagination |
+| S2.6 Voice fields (callLegId, recordingUrl, etc.) | ✅ Done | PATCH /:id/voice — stored in metadata JSONB |
+| S2.7 Interaction Kafka events | ✅ Done | interaction.created/assigned/transferred/closed |
+| S2.8 Interaction WebSocket gateway | ⬜ TODO | Deferred — not blocking voice MVP |
+| S2.9 Channel Gateway adapter pipeline | ✅ Done | IChannelAdapter, AdapterRegistry (Sprint 1 scaffold suffices) |
+| S2.10 Routing Engine scoring + Redis queue | ✅ Done | 5-factor agent scoring, Redis sorted set queue, enqueue/dequeue/assign |
+| S2.11 Routing Engine SLA enforcement | ✅ Done | 5s interval check, 80% warning, breach → overflow queue |
+| S2.12 Notification WebSocket gateway | ⬜ TODO | Deferred — not blocking voice MVP |
+
+**Sprint 2 completion: 10/12 tasks (83%) — remaining 2 non-blocking WS tasks deferred**
+
+### Sprint 3 — GoACD MVP Progress
+
+| Task | Status | Ghi chú |
+|---|---|---|
+| S3.1 Project init + deps | ✅ Done | Go 1.24, go-redis/v9, kafka-go, google/uuid. `go build` = 12MB static binary |
+| S3.2 ESL outbound server | ✅ Done | TCP :9090, per-call goroutine, OutboundConn (connect/answer/playback/bridge/hangup) |
+| S3.3 ESL inbound client | ✅ Done | Connect to FS:8021, API/BGApi/Originate/UUIDBridge/UUIDKill, auto-reconnect |
+| S3.4 Agent state machine | ✅ Done | Redis Lua scripts (ClaimAgent/ReleaseAgent), 6 states |
+| S3.5 Kafka consumer | ⏭️ Deferred | Publisher done, consumer deferred (Redis sync sufficient) |
+| S3.6 Queue manager | ✅ Done | Redis ZADD sorted sets, Enqueue/Dequeue/Peek/CheckSLA |
+| S3.7 Basic IVR | ✅ Done | answer → welcome → play_and_get_digits → 3 menu options → route to queue |
+| S3.8 Call delivery | ✅ Done | Full flow: IVR → queue → MOH → poll agents → claim → bridge (20s timeout) |
+| S3.9 gRPC/HTTP API | ✅ Done | :9091 — SetAgentState/GetAgentState/MakeCall/HangupCall/GetSIPCredentials |
+| S3.10 CDR generation | ✅ Done | BuildCDR() → cdr.created Kafka topic |
+| S3.11 Dockerfile | ✅ Done | Multi-stage (golang:1.24-alpine → alpine:3.20), healthcheck /healthz |
+| S3.12 Health + metrics | ✅ Done | :9092 — /healthz, /api/calls, /api/stats |
+
+**Sprint 3 completion: 11/12 tasks (92%) ✅**
+
+### Sprint 4–6 (Upcoming)
+- Sprint 4: Integration (CTI Adapter ↔ GoACD, event pipeline)
+- Sprint 5: Frontend (SIP.js WebRTC softphone, call UI)
+- Sprint 6: Hardening (transfer, recording, anti-desync, E2E tests)
 
 ---
 

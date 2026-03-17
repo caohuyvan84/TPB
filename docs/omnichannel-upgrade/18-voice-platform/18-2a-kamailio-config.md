@@ -26,10 +26,10 @@ tcp_connection_lifetime=3600     # 1 hour (WebSocket keepalive)
 tcp_accept_no_cl=yes             # Accept TCP without Content-Length (some WebRTC clients)
 tcp_rd_buf_size=16384
 
-listen=udp:KAMAILIO_IP:5060     # SIP UDP
-listen=tcp:KAMAILIO_IP:5060     # SIP TCP
-listen=tls:KAMAILIO_IP:5061     # SIP TLS
-listen=tls:KAMAILIO_IP:5066     # WebSocket Secure (WSS)
+listen=udp:nextgen.omicx.vn:5060     # SIP UDP
+listen=tcp:nextgen.omicx.vn:5060     # SIP TCP
+listen=tls:nextgen.omicx.vn:5061     # SIP TLS
+listen=tls:nextgen.omicx.vn:5066     # WebSocket Secure (WSS)
 
 # ── Module Loading ─────────────────────────────────────
 loadmodule "db_mysql.so"         # MariaDB backend
@@ -123,15 +123,15 @@ modparam("dispatcher", "ds_ping_interval", 5)        # Probe FS every 5s
 modparam("dispatcher", "ds_probing_threshold", 3)     # Mark down after 3 failed probes
 modparam("dispatcher", "ds_inactive_threshold", 5)    # Mark back up after 5 successful probes
 modparam("dispatcher", "ds_probing_mode", 1)          # Probe all destinations (not just failed)
-modparam("dispatcher", "ds_ping_from", "sip:kamailio@SIP_DOMAIN")
+modparam("dispatcher", "ds_ping_from", "sip:kamailio@nextgen.omicx.vn")
 
 # Dispatcher sets (populated via dSIPRouter GUI or SQL):
 # SET 1: FreeSWITCH instances (for inbound PSTN calls)
-#   1 sip:freeswitch-1:5080 0 0 weight=50
-#   1 sip:freeswitch-2:5080 0 0 weight=50
+#   1 sip:nextgenvoice01.omicx.vn:5080 0 0 weight=50
+#   1 sip:nextgenvoice02.omicx.vn:5080 0 0 weight=50
 # SET 2: FreeSWITCH instances (for WebRTC agent calls)
-#   2 sip:freeswitch-1:5080 0 0 weight=50
-#   2 sip:freeswitch-2:5080 0 0 weight=50
+#   2 sip:nextgenvoice01.omicx.vn:5080 0 0 weight=50
+#   2 sip:nextgenvoice02.omicx.vn:5080 0 0 weight=50
 
 # --- rtpengine ---
 modparam("rtpengine", "rtpengine_sock", "udp:rtpengine:22222")
@@ -147,7 +147,7 @@ modparam("dialog", "enable_stats", 1)
 # --- NAT Helper ---
 modparam("nathelper", "received_avp", "$avp(RECEIVED)")
 modparam("nathelper", "natping_interval", 30)
-modparam("nathelper", "sipping_from", "sip:keepalive@SIP_DOMAIN")
+modparam("nathelper", "sipping_from", "sip:keepalive@nextgen.omicx.vn")
 modparam("nathelper", "sipping_method", "OPTIONS")
 
 # --- Pike (Anti-Flood) ---
@@ -160,7 +160,7 @@ modparam("htable", "htable", "ipban=>size=8;autoexpire=300;")
 modparam("htable", "htable", "failedauth=>size=8;autoexpire=120;")
 
 # --- Topology Hiding ---
-modparam("topoh", "mask_ip", "KAMAILIO_IP")
+modparam("topoh", "mask_ip", "nextgen.omicx.vn")
 modparam("topoh", "mask_callid", 1)
 
 # --- Transaction ---
@@ -321,7 +321,7 @@ request_route {
         }
 
         # --- From FreeSWITCH (to agent or trunk) ---
-        if ($si == "freeswitch-1" || $si == "freeswitch-2" || $si =~ "^10\.0\.") {
+        if ($si == "nextgenvoice01.omicx.vn" || $si == "nextgenvoice02.omicx.vn" || $si =~ "^10\.0\.") {
             route(RTPENGINE);
             # If destination is a registered agent extension
             if ($rU =~ "^[0-9]{4}$") {
@@ -384,7 +384,7 @@ route[AUTH] {
             # Token format: username = "<expiry_unix>:<extension>"
             # Password = Base64(HMAC-SHA1(shared_secret, username))
             # Kamailio verifies: HMAC matches + timestamp not expired
-            if (!autheph_check("SIP_DOMAIN")) {
+            if (!autheph_check("nextgen.omicx.vn")) {
                 # Track failed auth for brute-force protection
                 $var(authcount) = $shtinc(failedauth=>$si);
                 if ($var(authcount) >= 5) {
@@ -392,19 +392,19 @@ route[AUTH] {
                     xlog("L_ALERT", "AUTH: Banning IP $si — 5 failed ephemeral auth attempts\n");
                     exit;
                 }
-                autheph_challenge("SIP_DOMAIN", "1");
+                autheph_challenge("nextgen.omicx.vn", "1");
                 exit;
             }
         } else {
             # ── Trunk auth via static credentials (auth_db) ──
-            if (!auth_check("SIP_DOMAIN", "subscriber", "1")) {
+            if (!auth_check("nextgen.omicx.vn", "subscriber", "1")) {
                 $var(authcount) = $shtinc(failedauth=>$si);
                 if ($var(authcount) >= 5) {
                     $sht(ipban=>$si) = 1;
                     xlog("L_ALERT", "AUTH: Banning IP $si — 5 failed trunk auth attempts\n");
                     exit;
                 }
-                auth_challenge("SIP_DOMAIN", "1");
+                auth_challenge("nextgen.omicx.vn", "1");
                 exit;
             }
         }
@@ -527,15 +527,15 @@ require_certificate = no        # Don't require client cert from WebRTC
 verify_certificate = no         # SIP.js doesn't send client cert
 
 # WSS listener (port 5066) — for WebRTC agents
-[server:KAMAILIO_IP:5066]
+[server:nextgen.omicx.vn:5066]
 method = TLSv1.2+
-certificate = /etc/kamailio/certs/pbx.tpb.vn.pem   # Must match SIP domain
-private_key = /etc/kamailio/certs/pbx.tpb.vn.key
+certificate = /etc/kamailio/certs/nextgen.omicx.vn.pem   # Must match SIP domain
+private_key = /etc/kamailio/certs/nextgen.omicx.vn.key
 require_certificate = no
 verify_certificate = no
 
 # SIP TLS listener (port 5061) — for SIP trunks
-[server:KAMAILIO_IP:5061]
+[server:nextgen.omicx.vn:5061]
 method = TLSv1.2+
 certificate = /etc/kamailio/certs/kamailio.pem
 private_key = /etc/kamailio/certs/kamailio.key
@@ -552,9 +552,9 @@ verify_certificate = no         # Internal network — trust FS
 **Certificate provisioning:**
 ```bash
 # Let's Encrypt for public domain (WebRTC WSS)
-certbot certonly --standalone -d pbx.tpb.vn
-ln -s /etc/letsencrypt/live/pbx.tpb.vn/fullchain.pem /etc/kamailio/certs/pbx.tpb.vn.pem
-ln -s /etc/letsencrypt/live/pbx.tpb.vn/privkey.pem /etc/kamailio/certs/pbx.tpb.vn.key
+certbot certonly --standalone -d nextgen.omicx.vn
+ln -s /etc/letsencrypt/live/nextgen.omicx.vn/fullchain.pem /etc/kamailio/certs/nextgen.omicx.vn.pem
+ln -s /etc/letsencrypt/live/nextgen.omicx.vn/privkey.pem /etc/kamailio/certs/nextgen.omicx.vn.key
 
 # Auto-renewal cron (reload Kamailio after renewal)
 # 0 3 * * * certbot renew --post-hook "kamctl tls.reload"
@@ -571,8 +571,8 @@ ln -s /etc/letsencrypt/live/pbx.tpb.vn/privkey.pem /etc/kamailio/certs/pbx.tpb.v
 -- Set 1: FreeSWITCH instances for inbound calls
 INSERT INTO dispatcher (setid, destination, flags, priority, attrs, description)
 VALUES
-  (1, 'sip:freeswitch-1:5080', 0, 0, 'weight=50;duid=fs1', 'FreeSWITCH Node 1'),
-  (1, 'sip:freeswitch-2:5080', 0, 0, 'weight=50;duid=fs2', 'FreeSWITCH Node 2');
+  (1, 'sip:nextgenvoice01.omicx.vn:5080', 0, 0, 'weight=50;duid=fs1', 'FreeSWITCH Node 1'),
+  (1, 'sip:nextgenvoice02.omicx.vn:5080', 0, 0, 'weight=50;duid=fs2', 'FreeSWITCH Node 2');
 
 -- Set 2: (reserved for future WebRTC-specific routing if needed)
 -- For now, same pool as set 1
@@ -598,7 +598,7 @@ VALUES
                     ┌─────────────────┐
                     │  Virtual IP     │
                     │  (VIP)          │
-                    │  SIP_DOMAIN     │
+                    │  nextgen.omicx.vn  │
                     └────────┬────────┘
                              │
                     ┌────────┼────────┐
@@ -652,22 +652,22 @@ vrrp_instance VI_SIP {
 # dSIPRouter one-time setup commands
 
 # 1. Configure domain
-dsip-cli domain add pbx.tpb.vn
+dsip-cli domain add nextgen.omicx.vn
 
 # 2. Add FreeSWITCH as PBX endpoint
 dsip-cli pbx add \
-    --name "freeswitch-1" \
-    --ip "freeswitch-1" \
+    --name "nextgenvoice01.omicx.vn" \
+    --ip "nextgenvoice01.omicx.vn" \
     --port 5080 \
     --type freeswitch \
-    --domain pbx.tpb.vn
+    --domain nextgen.omicx.vn
 
 dsip-cli pbx add \
-    --name "freeswitch-2" \
-    --ip "freeswitch-2" \
+    --name "nextgenvoice02.omicx.vn" \
+    --ip "nextgenvoice02.omicx.vn" \
     --port 5080 \
     --type freeswitch \
-    --domain pbx.tpb.vn
+    --domain nextgen.omicx.vn
 
 # 3. Add SIP trunk (carrier)
 dsip-cli carrier add \

@@ -36,7 +36,7 @@ Website --> tpb-chat-widget.js --> WebSocket --> Channel Gateway (MS-20) --> Cha
 ## Widget Initialization
 
 ```html
-<script src="https://chat.tpb.vn/widget.js"></script>
+<script src="https://chat.nextgen.omicx.vn/widget.js"></script>
 <script>
   TPBChat.init({
     tenantId: 'xxx',
@@ -67,7 +67,7 @@ Website --> tpb-chat-widget.js --> WebSocket --> Channel Gateway (MS-20) --> Cha
 The widget establishes a WebSocket connection to the Channel Gateway:
 
 ```
-wss://chat.tpb.vn/ws?tenantId=xxx&sessionId=yyy
+wss://chat.nextgen.omicx.vn/ws?tenantId=xxx&sessionId=yyy
 ```
 
 **Message Types (Client --> Server):**

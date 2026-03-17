@@ -3,6 +3,7 @@ import {
   Get,
   Put,
   Post,
+  Patch,
   Body,
   Param,
   Query,
@@ -26,6 +27,21 @@ export class InteractionController {
     return this.interactionService.listInteractions(filters);
   }
 
+  @Post()
+  async create(@Body() body: {
+    type: string;
+    channel: string;
+    customerId: string;
+    customerName?: string;
+    direction?: string;
+    subject?: string;
+    priority?: string;
+    callLegId?: string;
+    ivrSelections?: string[];
+  }) {
+    return this.interactionService.createInteraction(body);
+  }
+
   @Get(':id')
   async getOne(@Param('id') id: string) {
     return this.interactionService.getInteraction(id);
@@ -39,11 +55,30 @@ export class InteractionController {
   @Post(':id/assign')
   @Put(':id/assign')
   async assignAgent(@Param('id') id: string, @Body() dto: AssignAgentDto) {
-    return this.interactionService.assignAgent(
-      id,
-      dto.agentId,
-      dto.agentName,
+    return this.interactionService.assignAgent(id, dto.agentId, dto.agentName);
+  }
+
+  @Post(':id/transfer')
+  async transfer(
+    @Param('id') id: string,
+    @Body() body: { fromAgentId: string; toAgentId: string; toAgentName?: string; reason?: string },
+  ) {
+    return this.interactionService.transferInteraction(
+      id, body.fromAgentId, body.toAgentId, body.toAgentName, body.reason,
     );
+  }
+
+  @Get(':id/timeline')
+  async getTimeline(@Param('id') id: string) {
+    return this.interactionService.getTimeline(id);
+  }
+
+  @Patch(':id/voice')
+  async updateVoice(
+    @Param('id') id: string,
+    @Body() body: { callLegId?: string; recordingUrl?: string; callDuration?: number; ivrSelections?: string[] },
+  ) {
+    return this.interactionService.updateVoiceFields(id, body);
   }
 
   @Get(':id/notes')
@@ -60,14 +95,6 @@ export class InteractionController {
     const user = (req as any).user;
     const agentId = user?.sub || user?.id || '00000000-0000-0000-0000-000000000001';
     const agentName = user?.fullName || user?.username || 'System Administrator';
-
-    return this.interactionService.addNote(
-      id,
-      agentId,
-      agentName,
-      dto.content,
-      dto.tag,
-      dto.isPinned,
-    );
+    return this.interactionService.addNote(id, agentId, agentName, dto.content, dto.tag, dto.isPinned);
   }
 }

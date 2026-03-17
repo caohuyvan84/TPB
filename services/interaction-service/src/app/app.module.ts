@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { InteractionModule } from '../interaction/interaction.module';
 import { Interaction, InteractionNote, InteractionEvent } from '../entities';
+import { KafkaModule } from 'nest-kafka';
 
 @Module({
   imports: [
@@ -17,8 +18,9 @@ import { Interaction, InteractionNote, InteractionEvent } from '../entities';
       password: process.env.POSTGRES_PASSWORD || 'postgres',
       database: 'interaction_db',
       entities: [Interaction, InteractionNote, InteractionEvent],
-      synchronize: false,
+      synchronize: true,
     }),
+    KafkaModule,
     InteractionModule,
   ],
   controllers: [AppController],

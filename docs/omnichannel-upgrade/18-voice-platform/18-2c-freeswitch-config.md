@@ -163,7 +163,7 @@
     <list name="kamailio" default="deny">
       <node type="allow" cidr="10.0.0.0/8"/>
       <node type="allow" cidr="172.16.0.0/12"/>
-      <node type="allow" cidr="KAMAILIO_IP/32"/>
+      <node type="allow" cidr="nextgen.omicx.vn/32"/>
       <node type="allow" cidr="KAMAILIO_VIP/32"/>
     </list>
 
@@ -304,7 +304,7 @@ soxi /audio/vi/welcome.wav
        FreeSWITCH bridges to Kamailio, which resolves agent location.
 
        GoACD bridge command:
-         bridge sofia/internal/1007@pbx.tpb.vn
+         bridge sofia/internal/1007@nextgen.omicx.vn
 
        FreeSWITCH sends INVITE to Kamailio (via internal profile)
        → Kamailio looks up 1007 in usrloc → forwards to agent's WebSocket
@@ -391,7 +391,7 @@ Architecture:
 
   <!-- ── ACL: Only accept from Kamailio ── -->
   <extension name="acl_check" continue="true">
-    <condition field="${network_addr}" expression="^(KAMAILIO_IP|KAMAILIO_VIP|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2[0-9]|3[01])\.\d+\.\d+)$" break="on-false">
+    <condition field="${network_addr}" expression="^(nextgen.omicx.vn|KAMAILIO_VIP|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2[0-9]|3[01])\.\d+\.\d+)$" break="on-false">
       <!-- Passed ACL -->
       <action application="log" data="INFO Accepted call from ${network_addr}: ${caller_id_number} → ${destination_number}"/>
     </condition>

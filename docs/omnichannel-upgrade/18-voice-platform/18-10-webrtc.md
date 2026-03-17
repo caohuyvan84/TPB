@@ -38,16 +38,16 @@
 // GET /cti/webrtc/credentials
 // CTI Adapter → GoACD (gRPC) → return ephemeral SIP credentials
 {
-  "wsUri": "wss://pbx.tpb.vn:5066",
-  "sipUri": "sip:1007@pbx.tpb.vn",
+  "wsUri": "wss://nextgen.omicx.vn:5066",
+  "sipUri": "sip:1007@nextgen.omicx.vn",
   "authorizationUser": "1710500300:1007",    // ephemeral: "<expiry>:<extension>"
   "password": "a3F5dWJhbmsrY...",            // HMAC-SHA1 token (5min TTL)
   "displayName": "Nguyễn Văn Agent",
   "extension": "1007",                       // bare extension for display/routing
   "tokenExpiresAt": 1710500300,              // client knows expiry for refresh scheduling
   "iceServers": [
-    { "urls": "stun:stun.tpb.vn:3478" },
-    { "urls": "turn:turn.tpb.vn:3478", "username": "<temp>", "credential": "<temp>" }
+    { "urls": "stun:stun.nextgen.omicx.vn:3478" },
+    { "urls": "turn:turn.nextgen.omicx.vn:3478", "username": "<temp>", "credential": "<temp>" }
   ]
 }
 ```
@@ -59,7 +59,7 @@
 let currentCredentials = await fetchSIPCredentials(); // GET /cti/webrtc/credentials
 
 const userAgent = new UserAgent({
-  uri: UserAgent.makeURI(`sip:${currentCredentials.extension}@pbx.tpb.vn`),
+  uri: UserAgent.makeURI(`sip:${currentCredentials.extension}@nextgen.omicx.vn`),
   transportOptions: {
     server: currentCredentials.wsUri,
   },

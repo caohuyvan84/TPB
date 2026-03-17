@@ -1,0 +1,19 @@
+{
+  "name": "nest-redis-state",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/redis-state/src",
+  "projectType": "library",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/redis-state",
+        "main": "libs/redis-state/src/index.ts",
+        "tsConfig": "libs/redis-state/tsconfig.lib.json",
+        "assets": ["libs/redis-state/*.md"]
+      }
+    }
+  }
+}

@@ -366,8 +366,8 @@ func (r *Registry) RefreshSIPToken(ctx context.Context, agentID string) (usernam
 │        password = Base64(HMAC-SHA1(shared_secret, username))             │
 │      → Return to Agent Desktop:                                          │
 │        {                                                                 │
-│          wsUri: "wss://pbx.tpb.vn:5066",                                │
-│          sipUri: "sip:1007@pbx.tpb.vn",                                 │
+│          wsUri: "wss://nextgen.omicx.vn:5066",                                │
+│          sipUri: "sip:1007@nextgen.omicx.vn",                                 │
 │          authorizationUser: "1710500300:1007",  // ephemeral username    │
 │          password: "a3F5...",                    // HMAC token (5min TTL)│
 │          displayName: "Nguyễn Văn A",                                    │
@@ -379,9 +379,9 @@ func (r *Registry) RefreshSIPToken(ctx context.Context, agentID string) (usernam
 │                                                                          │
 │  [5] SIP.js registers with Kamailio                                     │
 │      SIP.js → WSS:5066 → Kamailio                                       │
-│      REGISTER sip:pbx.tpb.vn SIP/2.0                                    │
-│      From: <sip:1710500300:1007@pbx.tpb.vn>   // ephemeral username     │
-│      To: <sip:1710500300:1007@pbx.tpb.vn>                               │
+│      REGISTER sip:nextgen.omicx.vn SIP/2.0                                    │
+│      From: <sip:1710500300:1007@nextgen.omicx.vn>   // ephemeral username     │
+│      To: <sip:1710500300:1007@nextgen.omicx.vn>                               │
 │      Contact: <sip:1007@...:5066;transport=ws>                           │
 │      Expires: 30                                                         │
 │                                                                          │
@@ -393,7 +393,7 @@ func (r *Registry) RefreshSIPToken(ctx context.Context, agentID string) (usernam
 │      → Next re-REGISTER (within 5s) uses new token                       │
 │                                                                          │
 │  [6] Kamailio authenticates (auth_ephemeral)                             │
-│      → route[AUTH]: detect WSS → use autheph_check("pbx.tpb.vn")        │
+│      → route[AUTH]: detect WSS → use autheph_check("nextgen.omicx.vn")        │
 │      → auth_ephemeral:                                                    │
 │        1. Parse username "1710500300:1007" → expiry=1710500300, ext=1007 │
 │        2. Check: 1710500300 > current_unix_time → not expired            │

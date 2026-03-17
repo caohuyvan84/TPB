@@ -4,7 +4,9 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AgentModule } from '../agent/agent.module';
-import { AgentProfile, AgentChannelStatus, AgentSession } from '../entities';
+import { AgentProfile, AgentChannelStatus, AgentSession, AgentGroup, SkillDefinition } from '../entities';
+import { KafkaModule } from 'nest-kafka';
+import { RedisStateModule } from 'nest-redis-state';
 
 @Module({
   imports: [
@@ -16,9 +18,11 @@ import { AgentProfile, AgentChannelStatus, AgentSession } from '../entities';
       username: process.env.POSTGRES_USER || 'postgres',
       password: process.env.POSTGRES_PASSWORD || 'postgres',
       database: 'agent_db',
-      entities: [AgentProfile, AgentChannelStatus, AgentSession],
+      entities: [AgentProfile, AgentChannelStatus, AgentSession, AgentGroup, SkillDefinition],
       synchronize: true,
     }),
+    KafkaModule,
+    RedisStateModule,
     AgentModule,
   ],
   controllers: [AppController],
