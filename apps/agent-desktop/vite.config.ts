@@ -60,6 +60,7 @@ export default defineConfig({
     port: 3000,
     host: '0.0.0.0',
     open: false,
+    allowedHosts: ['nextgen.omicx.vn', 'localhost', '127.0.0.1'],
     proxy: {
       '/api': {
         target: 'http://localhost:8000',

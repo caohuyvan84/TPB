@@ -28,6 +28,38 @@ export class CtiController {
     return this.ctiService.transferCall(tenantId, body.callId, body.destination);
   }
 
+  @Post('cti/calls/make')
+  async makeCall(
+    @Query('tenantId') tenantId: string,
+    @Body() body: { agentId: string; destination: string },
+  ) {
+    return this.ctiService.makeCall(tenantId, body.agentId, body.destination);
+  }
+
+  @Get('cti/webrtc/credentials')
+  async getWebRTCCredentials(
+    @Query('tenantId') tenantId: string,
+    @Query('agentId') agentId: string,
+  ) {
+    return this.ctiService.getWebRTCCredentials(tenantId, agentId);
+  }
+
+  @Post('cti/agent/state')
+  async setAgentState(
+    @Query('tenantId') tenantId: string,
+    @Body() body: { agentId: string; status: string },
+  ) {
+    return this.ctiService.setAgentState(tenantId, body.agentId, body.status);
+  }
+
+  @Get('cti/agent/state')
+  async getAgentState(
+    @Query('tenantId') tenantId: string,
+    @Query('agentId') agentId: string,
+  ) {
+    return this.ctiService.getAgentState(tenantId, agentId);
+  }
+
   @Get('admin/cti/config')
   async getConfig(@Query('tenantId') tenantId: string) {
     return this.ctiService.getConfig(tenantId);

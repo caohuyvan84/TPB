@@ -1,42 +1,50 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CtiConfig } from '../entities';
-import { ICtiAdapter, MockCtiAdapter } from '../adapters/cti-adapter.interface';
+import { ICtiAdapter } from '../adapters/cti-adapter.interface';
+import { FreeSwitchAdapter } from '../adapters/freeswitch-adapter';
+import { CtiEventsGateway } from './cti-events.gateway';
 
 @Injectable()
 export class CtiService {
-  private adapters = new Map<string, ICtiAdapter>();
+  private readonly logger = new Logger(CtiService.name);
+  private adapters = new Map<string, FreeSwitchAdapter>();
 
   constructor(
     @InjectRepository(CtiConfig)
     private configRepo: Repository<CtiConfig>,
+    private ctiEvents: CtiEventsGateway,
   ) {}
 
-  async getAdapter(tenantId: string): Promise<ICtiAdapter> {
+  async getAdapter(tenantId: string): Promise<FreeSwitchAdapter> {
     if (this.adapters.has(tenantId)) {
       return this.adapters.get(tenantId)!;
     }
 
     const config = await this.configRepo.findOne({ where: { tenantId, isActive: true } });
-    if (!config) throw new Error('CTI config not found');
+    const goacdUrl = (config?.config as any)?.goacdUrl || process.env['GOACD_URL'] || 'http://localhost:9091';
 
-    // For MVP, always use mock adapter
-    const adapter = new MockCtiAdapter();
+    const adapter = new FreeSwitchAdapter({ goacdUrl });
     await adapter.connect();
     this.adapters.set(tenantId, adapter);
+    this.logger.log(`FreeSwitchAdapter created for tenant ${tenantId} → ${goacdUrl}`);
     return adapter;
   }
+
+  /* ── Call control ────────────────────────────────── */
 
   async answerCall(tenantId: string, callId: string) {
     const adapter = await this.getAdapter(tenantId);
     await adapter.answerCall(callId);
+    this.ctiEvents.broadcastCallEvent('call:answered', { callId, tenantId });
     return { success: true };
   }
 
   async hangupCall(tenantId: string, callId: string) {
     const adapter = await this.getAdapter(tenantId);
     await adapter.hangupCall(callId);
+    this.ctiEvents.broadcastCallEvent('call:ended', { callId, tenantId });
     return { success: true };
   }
 
@@ -49,8 +57,37 @@ export class CtiService {
   async transferCall(tenantId: string, callId: string, destination: string) {
     const adapter = await this.getAdapter(tenantId);
     await adapter.transferCall(callId, destination);
+    this.ctiEvents.broadcastCallEvent('call:transferred', { callId, destination, tenantId });
     return { success: true };
   }
+
+  async makeCall(tenantId: string, agentId: string, destination: string) {
+    const adapter = await this.getAdapter(tenantId);
+    const result = await adapter.makeCall(agentId, destination);
+    this.ctiEvents.broadcastCallEvent('call:outgoing', { agentId, destination, tenantId });
+    return result;
+  }
+
+  /* ── Agent state via GoACD ───────────────────────── */
+
+  async setAgentState(tenantId: string, agentId: string, status: string) {
+    const adapter = await this.getAdapter(tenantId);
+    return adapter.setAgentState(agentId, status);
+  }
+
+  async getAgentState(tenantId: string, agentId: string) {
+    const adapter = await this.getAdapter(tenantId);
+    return adapter.getAgentState(agentId);
+  }
+
+  /* ── WebRTC credentials ──────────────────────────── */
+
+  async getWebRTCCredentials(tenantId: string, agentId: string) {
+    const adapter = await this.getAdapter(tenantId);
+    return adapter.getSIPCredentials(agentId);
+  }
+
+  /* ── Config ──────────────────────────────────────── */
 
   async getConfig(tenantId: string) {
     return this.configRepo.findOne({ where: { tenantId } });
@@ -64,6 +101,18 @@ export class CtiService {
       config.vendor = data.vendor;
       config.config = data.config;
     }
+    // Invalidate cached adapter
+    this.adapters.delete(tenantId);
     return this.configRepo.save(config);
+  }
+
+  /* ── Broadcast incoming call event (called by Kafka consumer) ── */
+
+  broadcastIncomingCall(data: Record<string, unknown>) {
+    this.ctiEvents.broadcastCallEvent('call:incoming', data);
+  }
+
+  broadcastCallEnded(data: Record<string, unknown>) {
+    this.ctiEvents.broadcastCallEvent('call:ended', data);
   }
 }

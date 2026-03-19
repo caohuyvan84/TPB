@@ -123,7 +123,7 @@ func (s *GRPCServer) handleHangupCall(w http.ResponseWriter, r *http.Request) {
 func (s *GRPCServer) handleGetSIPCredentials(w http.ResponseWriter, r *http.Request) {
 	agentID := r.URL.Query().Get("agentId")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"wsUri":    fmt.Sprintf("wss://%s:5066", s.sipDomain),
+		"wsUri":    fmt.Sprintf("wss://%s/wss-sip/", s.sipDomain),
 		"sipUri":   fmt.Sprintf("sip:%s@%s", agentID, s.sipDomain),
 		"domain":   s.sipDomain,
 		"iceServers": []map[string]string{

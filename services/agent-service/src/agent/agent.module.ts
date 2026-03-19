@@ -4,13 +4,14 @@ import { AgentProfile, AgentChannelStatus, AgentSession, AgentGroup, SkillDefini
 import { AgentService } from './agent.service';
 import { AgentController } from './agent.controller';
 import { AgentGateway } from './agent.gateway';
+import { InteractionConsumerService } from './interaction-consumer.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([AgentProfile, AgentChannelStatus, AgentSession, AgentGroup, SkillDefinition]),
   ],
   controllers: [AgentController],
-  providers: [AgentService, AgentGateway],
+  providers: [AgentService, AgentGateway, InteractionConsumerService],
   exports: [AgentService],
 })
 export class AgentModule {}

@@ -76,10 +76,12 @@ function mapInteraction(raw: any): Interaction {
 export const interactionApi = {
   // Get all interactions with filters
   getAll: async (filters?: InteractionFilters) => {
-    const { data } = await apiClient.get<any[]>('/api/v1/interactions', {
+    const { data } = await apiClient.get<any>('/api/v1/interactions', {
       params: filters,
     });
-    return data.map(mapInteraction);
+    // Backend returns { data: [], nextCursor, hasMore } (cursor-based pagination)
+    const items = Array.isArray(data) ? data : (data?.data ?? []);
+    return items.map(mapInteraction);
   },
 
   // Get single interaction by ID

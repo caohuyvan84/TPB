@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CtiModule } from '../cti/cti.module';
 import { CtiConfig } from '../entities';
+import { KafkaModule } from 'nest-kafka';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { CtiConfig } from '../entities';
       entities: [CtiConfig],
       synchronize: true,
     }),
+    KafkaModule,
     CtiModule,
   ],
   controllers: [AppController],

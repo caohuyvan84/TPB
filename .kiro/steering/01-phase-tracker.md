@@ -545,10 +545,58 @@ inclusion: always
 
 **Sprint 3 completion: 11/12 tasks (92%) ✅**
 
-### Sprint 4–6 (Upcoming)
-- Sprint 4: Integration (CTI Adapter ↔ GoACD, event pipeline)
-- Sprint 5: Frontend (SIP.js WebRTC softphone, call UI)
-- Sprint 6: Hardening (transfer, recording, anti-desync, E2E tests)
+### Sprint 4 — Integration Progress
+
+| Task | Status | Ghi chú |
+|---|---|---|
+| S4.1 FreeSwitchAdapter | ✅ Done | Delegates to GoACD HTTP :9091 |
+| S4.2 CTI WebSocket gateway | ✅ Done | Socket.IO /cti namespace, broadcasts call events |
+| S4.3 WebRTC credentials | ✅ Done | GET /cti/webrtc/credentials → GoACD GetSIPCredentials |
+| S4.4 CDR Kafka consumer | ✅ Done | Consumes cdr.created + interaction events, broadcasts to WS |
+| S4.5 Channel Gateway voice adapter | ✅ Done | VoiceChannelAdapter + InboundConsumerService |
+| S4.6 Routing Engine inbound consumer | ✅ Done | routing.inbound → interaction.created → queue → assign |
+| S4.7 Agent interaction consumer | ✅ Done | Consumes interaction.assigned/closed |
+| S4.8 Event pipeline E2E | ✅ Done | GoACD → Kafka → NestJS → Socket.IO → Frontend wired |
+
+**Sprint 4 completion: 8/8 tasks (100%) ✅ COMPLETE**
+
+### Sprint 5 — Frontend (100%) ✅
+
+| Task | Status |
+|---|---|
+| S5.1-S5.3 WebRtcService + SIP.js + credentials | ✅ Done |
+| S5.4-S5.6 CallControl + FloatingWidget + TransferDialog | ✅ Done |
+| S5.7-S5.9 WS events + VoiceInteractions + pre-push | ✅ Done |
+
+**Files created:** `lib/webrtc-service.ts`, `hooks/useWebRTC.ts`, `hooks/useCallControl.ts`, `hooks/useCallEvents.ts`, `hooks/useVoiceInteractions.ts`
+
+### Sprint 6 — Hardening (89%) ✅
+
+| Task | Status |
+|---|---|
+| S6.1 Attended transfer | ✅ Done — BlindTransfer + AttendedTransfer (hold→consult→bridge) |
+| S6.2 Call recording | ✅ Done — Start/Stop/Pause/Resume via uuid_record |
+| S6.3 Anti-desync reconciler | ✅ Done — 4 checks every 2 min |
+| S6.4 Outbound click-to-call | ✅ Done — atomic claim → originate |
+| S6.5 Recording player | ✅ Done — CallRecordingPlayerLive (HTML5 audio) |
+| S6.6 Multi-tab SIP lock | ✅ Done — SipTabLock (BroadcastChannel) |
+| S6.7 E2E inbound tests | ✅ Done — 6 Playwright specs |
+| S6.8 E2E outbound tests | ✅ Done — 4 Playwright specs |
+| S6.9 Load test 50 calls | ⏭️ Deferred — pre-production |
+
+### Voice Channel Implementation — COMPLETE
+
+| Sprint | Completion |
+|---|---|
+| Sprint 1: Foundation | ✅ 100% (9/9) |
+| Sprint 2: Core Backend | ✅ 83% (10/12) |
+| Sprint 3: GoACD MVP | ✅ 92% (11/12) |
+| Sprint 4: Integration | ✅ 100% (8/8) |
+| Sprint 5: Frontend | ✅ 100% (9/9) |
+| Sprint 6: Hardening | ✅ 89% (8/9) |
+| **TOTAL** | **55/59 tasks (93%)** |
+
+**Deferred items (non-blocking):** 2 WS gateways, 1 Kafka consumer, 1 load test
 
 ---
 

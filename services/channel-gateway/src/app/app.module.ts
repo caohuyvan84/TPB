@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { ChannelConfig } from '../entities';
 import { GatewayModule } from '../gateway/gateway.module';
+import { KafkaModule } from 'nest-kafka';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { GatewayModule } from '../gateway/gateway.module';
       entities: [ChannelConfig],
       synchronize: true,
     }),
+    KafkaModule,
     GatewayModule,
   ],
 })

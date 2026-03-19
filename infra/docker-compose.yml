@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:18
+    image: postgres:16
     container_name: tpb-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}

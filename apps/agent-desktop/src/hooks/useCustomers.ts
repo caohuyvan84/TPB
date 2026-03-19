@@ -13,7 +13,12 @@ export function useCustomer(id: string | null) {
 export function useCustomerInteractions(id: string | null) {
   return useQuery({
     queryKey: ['customer', id, 'interactions'],
-    queryFn: () => customersApi.getInteractions(id!).then(res => res.data),
+    queryFn: async () => {
+      const res = await customersApi.getInteractions(id!);
+      const d = res.data;
+      // Backend returns { data: [], nextCursor, hasMore } (cursor-based pagination)
+      return Array.isArray(d) ? d : (d?.data ?? []);
+    },
     enabled: !!id,
   });
 }
