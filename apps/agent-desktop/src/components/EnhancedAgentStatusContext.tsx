@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
+import { io } from 'socket.io-client';
 import { useAgentStatus } from '../hooks/useAgents';
 import { agentsApi } from '../lib/api/agents';
 import { toast } from 'sonner';
@@ -56,6 +57,9 @@ interface EnhancedAgentStatusContextType {
   agentState: AgentState;
   updateAgentActivity: () => void;
   
+  // Voice call state (detailed: ready/ringing/originating/on_call/acw)
+  voiceCallState: string;
+
   // Connection Management
   connectionStatus: ConnectionStatus;
   setConnectionStatus: (status: ConnectionStatus) => void;
@@ -127,6 +131,9 @@ export function EnhancedAgentStatusProvider({
     }
   });
 
+  // Voice call state from GoACD (detailed: ready/ringing/originating/on_call/acw)
+  const [voiceCallState, setVoiceCallState] = useState<string>('ready');
+
   // Initialize agent state
   const [agentState, setAgentState] = useState<AgentState>({
     agentId,
@@ -161,6 +168,63 @@ export function EnhancedAgentStatusProvider({
       setChannelStatuses(prev => ({ ...prev, ...statusMap }));
     }
   }, [apiStatus]);
+
+  // Real-time agent status from GoACD via Socket.IO (agent:status_changed)
+  useEffect(() => {
+    const wsUrl = import.meta.env.VITE_CTI_WS_URL || window.location.origin;
+    const socket = io(`${wsUrl}/cti`, { transports: ['websocket'], autoConnect: true, query: { agentId } });
+
+    socket.on('agent:status_changed', (data: any) => {
+      console.log('[AgentStatus WS] Received:', data);
+      if (data.agentId !== agentId) return;
+      const newStatus = data.newStatus as string;
+      const channel = (data.channel || 'voice') as ChannelType;
+
+      // Map GoACD status → UI status
+      let uiStatus: AgentStatus = 'ready';
+      if (newStatus === 'ringing' || newStatus === 'originating' || newStatus === 'on_call') {
+        uiStatus = 'not-ready';
+      } else if (newStatus === 'acw') {
+        uiStatus = 'not-ready';
+      } else if (newStatus === 'ready') {
+        uiStatus = 'ready';
+      }
+
+      if (channel === 'voice') setVoiceCallState(newStatus);
+
+      setChannelStatuses(prev => ({
+        ...prev,
+        [channel]: {
+          ...prev[channel],
+          status: uiStatus,
+          reason: newStatus === 'acw' ? 'break' as NotReadyReason : undefined,
+          lastChanged: new Date(),
+          duration: 0,
+          isTimerActive: true,
+        },
+      }));
+
+      // Auto-ready after ACW: wait 5s then set agent back to Ready via API → Redis SADD
+      if (newStatus === 'acw') {
+        setTimeout(() => {
+          agentsApi.updateChannelStatus(channel, 'ready').catch(() => {});
+          setChannelStatuses(prev => ({
+            ...prev,
+            [channel]: {
+              ...prev[channel],
+              status: 'ready' as AgentStatus,
+              reason: undefined,
+              lastChanged: new Date(),
+              duration: 0,
+              isTimerActive: true,
+            },
+          }));
+        }, 5000); // 5s ACW timeout
+      }
+    });
+
+    return () => { socket.disconnect(); };
+  }, [agentId]);
 
   // Update timers every second
   useEffect(() => {
@@ -396,6 +460,7 @@ export function EnhancedAgentStatusProvider({
     getTotalChannelsCount,
     setAllChannelsStatus,
     agentState,
+    voiceCallState,
     updateAgentActivity,
     connectionStatus,
     setConnectionStatus,

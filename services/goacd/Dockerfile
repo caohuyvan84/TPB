@@ -8,6 +8,6 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /goacd ./cmd/goacd/
 FROM alpine:3.20
 RUN apk --no-cache add ca-certificates
 COPY --from=builder /goacd /usr/local/bin/goacd
-EXPOSE 9090 9091 9092
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD wget -q -O- http://localhost:9092/healthz || exit 1
+EXPOSE 9090 9091 9093
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD wget -q -O- http://localhost:9091/healthz || exit 1
 ENTRYPOINT ["goacd"]

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
@@ -39,17 +39,26 @@ interface InteractionListProps {
   channelFilter?: ChannelFilter;
   onChannelFilterChange?: (filter: ChannelFilter) => void;
   onCallBack?: (interaction: any) => void;
+  forceTab?: 'queue' | 'assigned' | 'closed';
 }
 
-export function InteractionList({ 
-  selectedId, 
-  onSelectInteraction, 
+export function InteractionList({
+  selectedId,
+  onSelectInteraction,
   interactions,
   channelFilter = 'all',
   onChannelFilterChange,
-  onCallBack
+  onCallBack,
+  forceTab
 }: InteractionListProps) {
   const [assignmentStatus, setAssignmentStatus] = useState<AssignmentStatus>('assigned');
+
+  // Force tab switch when prop changes (e.g. incoming call → switch to queue)
+  useEffect(() => {
+    if (forceTab && forceTab !== assignmentStatus) {
+      setAssignmentStatus(forceTab);
+    }
+  }, [forceTab]);
   const [filters, setFilters] = useState<InteractionFilters>({
     channel: channelFilter,
     channelSource: 'all',
@@ -101,7 +110,7 @@ export function InteractionList({
     // First, filter by assignment status (apply to assignmentFilteredInteractions instead of all)
     result = result.filter((interaction) => {
       const isAssigned = interaction.assignedAgent !== null && interaction.assignedAgent !== undefined;
-      const isClosed = interaction.status === 'completed' || interaction.status === 'closed';
+      const isClosed = interaction.status === 'completed' || interaction.status === 'closed' || interaction.status === 'resolved';
       
       switch (assignmentStatus) {
         case 'queue':
@@ -449,7 +458,7 @@ export function InteractionList({
     
     interactions.forEach((interaction) => {
       const isAssigned = interaction.assignedAgent !== null && interaction.assignedAgent !== undefined;
-      const isClosed = interaction.status === 'completed' || interaction.status === 'closed';
+      const isClosed = interaction.status === 'completed' || interaction.status === 'closed' || interaction.status === 'resolved';
       
       if (isClosed) {
         counts.closed++;

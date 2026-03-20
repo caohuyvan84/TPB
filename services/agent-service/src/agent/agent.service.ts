@@ -58,11 +58,18 @@ export class AgentService {
     return profile;
   }
 
+  /** Resolve PG profile UUID → agentId string (e.g. "AGT001") for Redis key */
+  private async resolveAgentKey(profileId: string): Promise<string> {
+    const profile = await this.agentProfileRepo.findOne({ where: { id: profileId } });
+    return profile?.agentId || profileId;
+  }
+
   /* ── Status (Redis hot-state + PostgreSQL persist) ── */
 
   async getChannelStatuses(agentId: string) {
-    // Try Redis first for hot state
-    const redisState = await this.agentState.getState(agentId);
+    // Try Redis first for hot state — use agentId key (AGT001), not UUID
+    const redisKey = await this.resolveAgentKey(agentId);
+    const redisState = await this.agentState.getState(redisKey);
     if (redisState) {
       return {
         source: 'redis',
@@ -114,9 +121,10 @@ export class AgentService {
 
     const saved = await this.channelStatusRepo.save(channelStatus);
 
-    // Update Redis hot-state
+    // Update Redis hot-state — use agentId key (AGT001), not UUID
+    const redisKey = await this.resolveAgentKey(agentId);
     const redisStatus = status === 'ready' ? 'ready' : 'not_ready';
-    await this.agentState.setStatus(agentId, redisStatus as any);
+    await this.agentState.setStatus(redisKey, redisStatus as any);
 
     // Publish Kafka event
     await this.kafkaProducer.publish(
@@ -153,8 +161,9 @@ export class AgentService {
     });
     await this.sessionRepo.save(session);
 
-    // Set online in Redis
-    await this.agentState.setAgentOnline(agentId, skills);
+    // Set online in Redis — use agentId key (AGT001)
+    const redisKey = await this.resolveAgentKey(agentId);
+    await this.agentState.setAgentOnline(redisKey, skills);
 
     // Publish event
     await this.kafkaProducer.publish(
@@ -180,8 +189,9 @@ export class AgentService {
       await this.sessionRepo.save(session);
     }
 
-    // Remove from Redis
-    await this.agentState.setAgentOffline(agentId);
+    // Remove from Redis — use agentId key (AGT001)
+    const redisKey2 = await this.resolveAgentKey(agentId);
+    await this.agentState.setAgentOffline(redisKey2);
 
     // Publish event
     await this.kafkaProducer.publish(
@@ -208,8 +218,9 @@ export class AgentService {
       await this.sessionRepo.save(session);
     }
 
-    // Refresh Redis TTL
-    await this.agentState.heartbeat(agentId);
+    // Refresh Redis TTL — use agentId key (AGT001)
+    const redisKey3 = await this.resolveAgentKey(agentId);
+    await this.agentState.heartbeat(redisKey3);
 
     return { success: true, timestamp: new Date() };
   }

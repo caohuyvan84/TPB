@@ -90,16 +90,17 @@ export function useInteractionStats(interactions: Interaction[]) {
     };
 
     return interactions.reduce((acc, interaction) => {
-      // Channel stats
+      // Channel stats — only count active interactions (not closed/completed/resolved)
+      const isTerminal = interaction.status === 'closed' || interaction.status === 'completed' || interaction.status === 'resolved';
       if (interaction.type === 'missed-call') {
         acc.missed++;
-        acc.voice++; // Missed calls also count as voice interactions
+        if (!isTerminal) acc.voice++;
       } else if (interaction.channel === 'voice' || interaction.type === 'call') {
-        acc.voice++;
+        if (!isTerminal) acc.voice++;
       } else if (interaction.channel === 'email' || interaction.type === 'email') {
-        acc.email++;
+        if (!isTerminal) acc.email++;
       } else if (interaction.channel === 'chat' || interaction.type === 'chat') {
-        acc.chat++;
+        if (!isTerminal) acc.chat++;
       }
 
       // Status stats

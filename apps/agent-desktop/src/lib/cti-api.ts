@@ -22,34 +22,42 @@ export interface CtiConfig {
   isActive: boolean;
 }
 
+const DEFAULT_TENANT = '00000000-0000-0000-0000-000000000000';
+const t = `tenantId=${DEFAULT_TENANT}`;
+
 export const ctiApi = {
   answerCall: async (request: CallControlRequest): Promise<CallControlResponse> => {
-    const { data } = await apiClient.post('/cti/calls/answer', request);
+    const { data } = await apiClient.post(`/api/v1/cti/calls/answer?${t}`, request);
     return data;
   },
 
   hangupCall: async (request: CallControlRequest): Promise<CallControlResponse> => {
-    const { data } = await apiClient.post('/cti/calls/hangup', request);
+    const { data } = await apiClient.post(`/api/v1/cti/calls/hangup?${t}`, request);
     return data;
   },
 
   transferCall: async (request: CallControlRequest): Promise<CallControlResponse> => {
-    const { data } = await apiClient.post('/cti/calls/transfer', request);
+    const { data } = await apiClient.post(`/api/v1/cti/calls/transfer?${t}`, request);
     return data;
   },
 
   holdCall: async (request: CallControlRequest): Promise<CallControlResponse> => {
-    const { data } = await apiClient.post('/cti/calls/hold', request);
+    const { data } = await apiClient.post(`/api/v1/cti/calls/hold?${t}`, request);
+    return data;
+  },
+
+  makeCall: async (request: { agentId: string; destination: string }): Promise<CallControlResponse> => {
+    const { data } = await apiClient.post(`/api/v1/cti/calls/make?${t}`, request);
     return data;
   },
 
   getConfig: async (): Promise<CtiConfig> => {
-    const { data } = await apiClient.get('/admin/cti/config');
+    const { data } = await apiClient.get('/api/v1/admin/cti/config');
     return data;
   },
 
   updateConfig: async (config: Partial<CtiConfig>): Promise<CtiConfig> => {
-    const { data } = await apiClient.patch('/admin/cti/config', config);
+    const { data } = await apiClient.patch('/api/v1/admin/cti/config', config);
     return data;
   },
 };

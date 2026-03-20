@@ -1,9 +1,13 @@
-import { Controller, Post, Get, Patch, Body, Query, Param } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Body, Query, Param } from '@nestjs/common';
 import { CtiService } from './cti.service';
+import { PushService } from './push.service';
 
 @Controller()
 export class CtiController {
-  constructor(private readonly ctiService: CtiService) {}
+  constructor(
+    private readonly ctiService: CtiService,
+    private readonly pushService: PushService,
+  ) {}
 
   @Post('cti/calls/answer')
   async answerCall(@Query('tenantId') tenantId: string, @Body() body: { callId: string }) {
@@ -11,8 +15,8 @@ export class CtiController {
   }
 
   @Post('cti/calls/hangup')
-  async hangupCall(@Query('tenantId') tenantId: string, @Body() body: { callId: string }) {
-    return this.ctiService.hangupCall(tenantId, body.callId);
+  async hangupCall(@Query('tenantId') tenantId: string, @Body() body: { callId?: string; agentId?: string }) {
+    return this.ctiService.hangupCall(tenantId, body.agentId || body.callId || '');
   }
 
   @Post('cti/calls/hold')
@@ -68,5 +72,25 @@ export class CtiController {
   @Patch('admin/cti/config')
   async updateConfig(@Query('tenantId') tenantId: string, @Body() data: any) {
     return this.ctiService.updateConfig(tenantId, data);
+  }
+
+  // ── Web Push Subscription ──────────────────────────
+
+  @Post('cti/push-subscription')
+  async savePushSubscription(@Body() body: { agentId: string; subscription: any }) {
+    await this.pushService.saveSubscription(body.agentId, body.subscription);
+    return { status: 'ok' };
+  }
+
+  @Delete('cti/push-subscription')
+  async removePushSubscription(@Query('agentId') agentId: string) {
+    await this.pushService.removeSubscription(agentId);
+    return { status: 'ok' };
+  }
+
+  @Post('cti/agent-tab-status')
+  async reportTabStatus(@Body() body: { agentId: string; tabVisible: boolean; audioActive: boolean; sipRegistered: boolean }) {
+    await this.pushService.saveTabStatus(body.agentId, body);
+    return { status: 'ok' };
   }
 }

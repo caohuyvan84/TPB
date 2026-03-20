@@ -27,7 +27,14 @@ export class CtiEventsGateway
   }
 
   handleConnection(client: Socket) {
-    this.logger.debug(`Client connected: ${client.id}`);
+    // Join agent-scoped room for targeted event delivery
+    const agentId = (client.handshake.query?.['agentId'] || '') as string;
+    if (agentId) {
+      client.join(`agent:${agentId}`);
+      this.logger.log(`Client ${client.id} joined room agent:${agentId}`);
+    } else {
+      this.logger.debug(`Client ${client.id} connected (no agentId, broadcast only)`);
+    }
   }
 
   handleDisconnect(client: Socket) {

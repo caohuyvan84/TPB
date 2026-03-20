@@ -1,36 +1,38 @@
 import { io, Socket } from 'socket.io-client';
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:8000';
+// General agent WebSocket client.
+// Currently disabled: no backend service serves the root Socket.IO namespace.
+// Agent real-time events (queue, heartbeat) will be wired when Agent Service WS gateway is ready.
+// CTI call events use a separate socket in useCallEvents.ts (/cti namespace).
 
 class WebSocketClient {
   private socket: Socket | null = null;
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
+  private _enabled = false; // Disabled until Agent Service WS gateway is implemented
 
   connect(token: string) {
+    if (!this._enabled) return; // No-op until backend is ready
     if (this.socket?.connected) return;
 
-    this.socket = io(WS_URL, {
+    const wsUrl = import.meta.env.VITE_WS_URL || '';
+    this.socket = io(wsUrl, {
       auth: { token },
       transports: ['websocket'],
       reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      reconnectionAttempts: this.maxReconnectAttempts,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 10000,
+      reconnectionAttempts: 3,
     });
 
     this.socket.on('connect', () => {
-      console.log('WebSocket connected');
-      this.reconnectAttempts = 0;
+      console.log('[wsClient] Connected');
     });
 
     this.socket.on('disconnect', () => {
-      console.log('WebSocket disconnected');
+      console.log('[wsClient] Disconnected');
     });
 
     this.socket.on('connect_error', (error) => {
-      console.error('WebSocket connection error:', error);
-      this.reconnectAttempts++;
+      console.warn('[wsClient] Connection error (non-critical):', error.message);
     });
   }
 

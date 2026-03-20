@@ -55,7 +55,7 @@ export class InteractionQueueChannel {
     wsClient.on(`${channel}:sla:warning`, this.handleSLAWarning);
     wsClient.on(`${channel}:sla:breached`, this.handleSLABreached);
 
-    console.log(`[Queue] Subscribed to ${channel}`);
+    // Queue subscription registered (wsClient may be disabled)
   }
 
   /**

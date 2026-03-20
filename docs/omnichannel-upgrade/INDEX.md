@@ -3,14 +3,20 @@
 > **Start here.** This is the master index for the omnichannel upgrade documentation.
 > All content originates from `OMNICHANNEL-UPGRADE-PLAN.md` (V1) and `OMNICHANNEL-UPGRADE-PLAN-V2.md` (V2), restructured into modular files.
 > PBX integration focuses on **Kamailio + FreeSWITCH + GoACD** (open-source stack).
-> **Last updated:** 2026-03-17
+> **Last updated:** 2026-03-20
 
 ---
 
 ## Active Implementation Plan
 
-> **[VOICE-IMPLEMENTATION-PLAN.md](./VOICE-IMPLEMENTATION-PLAN.md)** — Kế hoạch triển khai Voice Channel (12 tuần, 6 sprint)
+> **[VOICE-IMPLEMENTATION-PLAN.md](./VOICE-IMPLEMENTATION-PLAN.md)** — Kế hoạch triển khai Voice Channel (14 tuần, 9 sprint)
 > Ưu tiên #1: Hoàn thiện kênh voice end-to-end (hạ tầng + backend + GoACD + frontend WebRTC)
+
+> **[19-voice-infra-status.md](./19-voice-infra-status.md)** — Hiện trạng hạ tầng Voice & Kế hoạch triển khai Softphone (2026-03-19)
+> Kết quả kiểm tra Kamailio/rtpengine/coturn/FreeSWITCH, phân tích SIP auth flow, task list triển khai softphone SIP.js
+
+> **[20-deployed-infrastructure.md](./20-deployed-infrastructure.md)** — Toàn bộ hạ tầng đã triển khai (2026-03-19)
+> Docker containers, 20 NestJS services, Kong routes, PostgreSQL 26 DBs, Kafka 15 topics, Nginx proxy, firewall, user accounts, voice infra
 
 ---
 
@@ -39,6 +45,11 @@
 | Risks | [16-risk-assessment.md](./16-risk-assessment.md) |
 | Requirement → section mapping | [17-requirements-crossref.md](./17-requirements-crossref.md) |
 | **Voice Platform (Kamailio + FreeSWITCH + GoACD)** | [18-voice-platform/README.md](./18-voice-platform/README.md) |
+| **Voice Infra Status & Softphone Plan** | [19-voice-infra-status.md](./19-voice-infra-status.md) |
+| **Full Deployed Infrastructure Inventory** | [20-deployed-infrastructure.md](./20-deployed-infrastructure.md) |
+| **GoACD Gap Analysis (Design vs Code)** | [21-goacd-gap-analysis.md](./21-goacd-gap-analysis.md) |
+| **Outbound Call Design (routing, ringback, CDR)** | [22-outbound-call-design.md](./22-outbound-call-design.md) |
+| **Call Timeline Real Data (IVR, queue, scoring, events)** | [23-call-timeline-realdata.md](./23-call-timeline-realdata.md) |
 | Kamailio / SIP proxy config | [18-voice-platform/18-2a-kamailio-config.md](./18-voice-platform/18-2a-kamailio-config.md) |
 | rtpengine / media relay | [18-voice-platform/18-2b-rtpengine-config.md](./18-voice-platform/18-2b-rtpengine-config.md) |
 | FreeSWITCH / media server | [18-voice-platform/18-2c-freeswitch-config.md](./18-voice-platform/18-2c-freeswitch-config.md) |
@@ -127,6 +138,16 @@
 | [18-14-performance-ops.md](./18-voice-platform/18-14-performance-ops.md) | Performance & ops hardening | Goroutine management, Prometheus alerts, connection pools, DTMF, caching |
 | [18-15-docker-infra.md](./18-voice-platform/18-15-docker-infra.md) | Docker infrastructure | docker-compose.yml, all services, env vars, volumes, networks, health checks |
 
+### Voice Infrastructure Status & Softphone Deployment
+
+| # | File | Description | Key Content |
+|---|---|---|---|
+| 19 | [19-voice-infra-status.md](./19-voice-infra-status.md) | Voice infra verification + softphone deployment plan | Kamailio/rtpengine/coturn/FS status, SIP auth flow analysis, 16 tasks for softphone MVP |
+| 20 | [20-deployed-infrastructure.md](./20-deployed-infrastructure.md) | Full deployed infrastructure inventory | Docker, 20 NestJS services, Kong routes, 26 DBs, Kafka topics, Nginx, firewall, user accounts |
+| 21 | [21-goacd-gap-analysis.md](./21-goacd-gap-analysis.md) | GoACD Design vs Implementation Gap Analysis | 7 areas analyzed, CRITICAL: outbound no bridge, HIGH: no scoring/re-route/metadata push |
+| 22 | [22-outbound-call-design.md](./22-outbound-call-design.md) | Outbound Call Design | Flow, ringback, SIP→status mapping, CDR fields, Kamailio route, FS gateway, interaction history |
+| 23 | [23-call-timeline-realdata.md](./23-call-timeline-realdata.md) | Call Timeline Real Data | Event schema (16 types), DB schema, API design, GoACD publish points, frontend mapping, sequence diagram |
+
 ### Appendices
 
 | File | Description |
@@ -139,12 +160,26 @@
 
 ## How to Use This Documentation
 
-### For AI Agents (Claude Code)
-1. **Start with INDEX.md** (this file) to find the right section
-2. **Read only the specific file** relevant to your task — each file is self-contained with enough context
-3. **Follow "Related Files" links** at the bottom of each file if you need more context
-4. **When modifying a feature**: read the feature file + its related files, never need to read all files
-5. **Voice platform changes**: start from [18-voice-platform/README.md](./18-voice-platform/README.md)
+### For AI Agents (Claude Code) — QUAN TRỌNG: Đọc khi mở phiên mới
+
+**Mỗi khi bắt đầu phiên làm việc mới, Claude Code PHẢI đọc:**
+1. **File này (INDEX.md)** — để nắm toàn bộ cấu trúc tài liệu và task đang chờ
+2. **[20-deployed-infrastructure.md](./20-deployed-infrastructure.md)** — để biết hạ tầng đã triển khai: 20 NestJS services, ports, Docker containers, DBs, Kong routes, user accounts, voice infra
+3. **[VOICE-IMPLEMENTATION-PLAN.md](./VOICE-IMPLEMENTATION-PLAN.md)** (section 5 + Sprint hiện tại) — để biết task nào đang thực hiện
+4. **Claude Code memory** (`/root/.claude/projects/...`) — để recall context từ phiên trước
+
+**Khi thực hiện task cụ thể:**
+5. **Read only the specific file** relevant to your task — each file is self-contained with enough context
+6. **Follow "Related Files" links** at the bottom of each file if you need more context
+7. **When modifying a feature**: read the feature file + its related files, never need to read all files
+8. **Voice platform changes**: start from [18-voice-platform/README.md](./18-voice-platform/README.md)
+
+**Task đang chờ triển khai (cập nhật 2026-03-19):**
+- **Sprint 10: DONE** — Softphone wired, SIP registration verified
+- **Sprint 11 Phase G1-G3: DONE** — Outbound via GoACD, 5-factor scoring, transfer state, 8 Kafka events
+- **Sprint 12: DONE** — Real-time state sync + SoftphoneBubble
+- **Sprint 13: DONE** — Outbound via GoACD, telco simulator, FS gateway, Kamailio PSTN route
+- **Sprint 15: NEXT** — GoACD Inbound Overhaul: ESL event-driven, bridge detection, call end, metadata, state machine. 17 tasks, 5 phases, ~17 ngày
 
 ### For Developers
 - **Planning**: Start with [03-requirements.md](./03-requirements.md) → [15-implementation-plan.md](./15-implementation-plan.md)

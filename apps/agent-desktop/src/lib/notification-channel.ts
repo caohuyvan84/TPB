@@ -5,9 +5,16 @@ interface NotificationEvent {
   notification: any;
 }
 
+type StatusCallback = (status: 'connected' | 'connecting' | 'disconnected') => void;
+
 class NotificationChannel {
   private socket: Socket | null = null;
   private agentId: string | null = null;
+  private statusCallback: StatusCallback | null = null;
+
+  setStatusCallback(cb: StatusCallback) {
+    this.statusCallback = cb;
+  }
 
   connect(agentId: string, token: string) {
     if (this.socket?.connected && this.agentId === agentId) {
@@ -17,18 +24,36 @@ class NotificationChannel {
     this.disconnect();
     this.agentId = agentId;
 
-    this.socket = io(`${import.meta.env.VITE_WS_URL || 'ws://localhost:3006'}`, {
+    this.socket = io(`${import.meta.env.VITE_WS_URL || window.location.origin}`, {
       auth: { token },
       transports: ['websocket'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 15000,
+      reconnectionAttempts: Infinity,
+      timeout: 10000,
     });
 
     this.socket.on('connect', () => {
       console.log('[NotificationChannel] Connected');
       this.socket?.emit('notification:subscribe', { agentId });
+      this.statusCallback?.('connected');
     });
 
-    this.socket.on('disconnect', () => {
-      console.log('[NotificationChannel] Disconnected');
+    this.socket.on('disconnect', (reason) => {
+      console.log('[NotificationChannel] Disconnected:', reason);
+      this.statusCallback?.('disconnected');
+    });
+
+    this.socket.io.on('reconnect_attempt', () => {
+      this.statusCallback?.('connecting');
+    });
+
+    this.socket.io.on('reconnect', () => {
+      console.log('[NotificationChannel] Reconnected, re-subscribing');
+      // Re-subscribe after reconnect
+      this.socket?.emit('notification:subscribe', { agentId });
+      this.statusCallback?.('connected');
     });
   }
 
@@ -37,6 +62,14 @@ class NotificationChannel {
       this.socket.disconnect();
       this.socket = null;
       this.agentId = null;
+    }
+  }
+
+  /** Force reconnect (called by network recovery) */
+  forceReconnect() {
+    if (this.socket && !this.socket.connected) {
+      console.log('[NotificationChannel] Force reconnect');
+      this.socket.connect();
     }
   }
 

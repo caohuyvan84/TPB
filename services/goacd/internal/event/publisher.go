@@ -36,12 +36,16 @@ func (p *Publisher) getWriter(topic string, brokers []string) *kafka.Writer {
 	if w, ok := p.writers[topic]; ok {
 		return w
 	}
-	// Lazy create — in production use a pool
-	return &kafka.Writer{
-		Addr:     kafka.TCP(brokers...),
-		Topic:    topic,
-		Balancer: &kafka.LeastBytes{},
+	w := &kafka.Writer{
+		Addr:         kafka.TCP(brokers...),
+		Topic:        topic,
+		Balancer:     &kafka.LeastBytes{},
+		BatchTimeout: 50 * time.Millisecond,
+		WriteTimeout: 5 * time.Second,
 	}
+	p.writers[topic] = w
+	p.logger.Info("Kafka writer created", "topic", topic, "brokers", brokers)
+	return w
 }
 
 // Publish sends a typed event to a Kafka topic.
@@ -66,7 +70,9 @@ func (p *Publisher) Publish(ctx context.Context, brokers []string, topic string,
 	})
 
 	if err != nil {
-		p.logger.Warn("Kafka publish failed (non-fatal)", "topic", topic, "err", err)
+		p.logger.Error("Kafka publish FAILED", "topic", topic, "err", err)
+	} else {
+		p.logger.Info("Kafka published", "topic", topic, "key", key)
 	}
 	return err
 }

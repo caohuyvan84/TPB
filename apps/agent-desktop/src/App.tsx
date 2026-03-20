@@ -1,9 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAgentHeartbeat } from './hooks/useAgentHeartbeat';
 import { useInteractions } from './hooks/useInteractionsApi';
 import { useRealtimeQueue } from './hooks/useRealtimeQueue';
 import { useRealtimeNotifications } from './hooks/useNotifications';
 import { useTickets, useTicket } from './hooks/useTickets';
+import { useVoiceInteractions } from './hooks/useVoiceInteractions';
+import { useAuth } from './contexts/AuthContext';
+import { CallControlProvider, useSharedCallControl } from './contexts/CallControlContext';
+import { SoftphoneProvider, useSoftphone } from './contexts/SoftphoneContext';
+import { ConnectionHubProvider } from './contexts/ConnectionHubContext';
+import { ConnectionBanner } from './components/ConnectionBanner';
 import { Button } from './components/ui/button';
 // Agent Desktop Application with multi-channel support
 import { EnhancedAgentHeader } from './components/EnhancedAgentHeader';
@@ -13,6 +19,7 @@ import { CustomerInfo } from './components/CustomerInfoScrollFixed';
 import { TicketDetail } from './components/TicketDetail';
 import { TransferCallDialog } from './components/TransferCallDialog';
 import { FloatingCallWidget } from './components/FloatingCallWidget';
+import { SoftphoneBubble } from './components/SoftphoneBubble';
 import { AgentStatusWidget } from './components/AgentStatusWidget';
 import { CallProvider, useCall } from './components/CallContext';
 import { EnhancedAgentStatusProvider, useEnhancedAgentStatus } from './components/EnhancedAgentStatusContext';
@@ -60,7 +67,6 @@ function AppContent() {
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
-  const [demoControlsCollapsed, setDemoControlsCollapsed] = useState(true);
   const [emailReplyDialogOpen, setEmailReplyDialogOpen] = useState(false);
   const [customerDefaultTab, setCustomerDefaultTab] = useState('tickets');
   
@@ -74,17 +80,109 @@ function AppContent() {
   });
 
   // Call context
-  const { 
-    currentCall, 
-    isCallWidgetVisible, 
-    startCall, 
+  const {
+    currentCall,
+    isCallWidgetVisible,
+    startCall,
     endCall,
+    updateCallStatus,
     showCallWidget,
-    hideCallWidget 
+    hideCallWidget
   } = useCall();
 
   // Enhanced agent status context
   const { agentState } = useEnhancedAgentStatus();
+
+  // Shared call control (single SIP.js instance for entire app)
+  const { user } = useAuth();
+  const callControl = useSharedCallControl();
+
+  // Live voice interactions from WebSocket events
+  const { voiceInteractions } = useVoiceInteractions();
+
+  // Softphone bubble context
+  const softphone = useSoftphone();
+
+  // Bridge SIP.js incoming call → CallContext
+  useEffect(() => {
+    if (callControl.incomingCall && !currentCall) {
+      startCall({
+        customerName: callControl.incomingCall.callerName || callControl.incomingCall.callerNumber,
+        customerPhone: callControl.incomingCall.callerNumber,
+        status: 'ringing',
+        source: 'Inbound Voice (SIP)',
+      });
+    }
+  }, [callControl.incomingCall, currentCall, startCall]);
+
+  // Bridge SIP.js call answered → update CallContext status
+  useEffect(() => {
+    if (callControl.activeCallId && currentCall?.status === 'ringing') {
+      updateCallStatus('connected');
+    }
+  }, [callControl.activeCallId, currentCall?.status, updateCallStatus]);
+
+  // Active call interaction — injected into interaction list during call
+  const [activeCallInteraction, setActiveCallInteraction] = useState<any>(null);
+
+  // Create/update active call interaction when call state changes
+  useEffect(() => {
+    if (callControl.incomingCall || callControl.hasActiveCall) {
+      const phone = currentCall?.customerPhone || callControl.incomingCall?.callerNumber || '';
+      const name = currentCall?.customerName || callControl.incomingCall?.callerName || phone;
+      const isConnected = callControl.hasActiveCall;
+
+      // Check if real interaction exists from DB
+      const real = interactions.find((i: any) =>
+        i.channel === 'voice' &&
+        (i.status === 'in-progress' || i.status === 'new') &&
+        i.metadata?.callerNumber === phone
+      );
+
+      const interaction = real || {
+        id: `live-call-${phone}`,
+        displayId: isConnected ? 'Cuộc gọi đang diễn ra' : 'Cuộc gọi đến',
+        type: 'call',
+        channel: 'voice',
+        status: isConnected ? 'in-progress' : 'new',
+        direction: (currentCall?.source || '').includes('Outbound') ? 'outbound' : 'inbound',
+        customerName: name,
+        customerPhone: phone,
+        customerEmail: '',
+        priority: 'high',
+        isVip: false,
+        isVIP: false,
+        tags: [],
+        source: currentCall?.source || 'Voice',
+        subject: isConnected ? `Đang gọi với ${name}` : `Cuộc gọi đến từ ${name}`,
+        snippet: phone,
+        timestamp: new Date().toISOString(),
+        time: new Date().toISOString(),
+        duration: '',
+        assignedAgent: isConnected ? (user?.agentId || 'agent') : null,
+        metadata: { callerNumber: phone },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      setActiveCallInteraction(interaction);
+      setSelectedInteraction(interaction);
+    } else {
+      // Call ended — clear active interaction
+      setActiveCallInteraction(null);
+    }
+  }, [callControl.incomingCall, callControl.hasActiveCall, currentCall, interactions]);
+
+  // Bridge SIP.js call ended → endCall in CallContext
+  useEffect(() => {
+    if (!callControl.hasActiveCall && !callControl.incomingCall && currentCall && currentCall.status !== 'ended') {
+      // SIP.js has no active call but CallContext thinks there's one — sync
+      if (callControl.sipStatus === 'registered') {
+        // Only auto-end if SIP is connected (avoids false cleanup on init)
+        endCall();
+      }
+    }
+  }, [callControl.hasActiveCall, callControl.incomingCall, callControl.sipStatus, currentCall, endCall]);
 
   // Notifications context
   const {
@@ -110,12 +208,8 @@ function AppContent() {
     setRightPanelCollapsed(!rightPanelCollapsed);
   };
 
-  const toggleDemoControls = () => {
-    setDemoControlsCollapsed(!demoControlsCollapsed);
-  };
-
   const handleNavigateToInteraction = (interactionId: string) => {
-    const targetInteraction = interactions.find(item => item.id === interactionId);
+    const targetInteraction = interactions.find((item: any) => item.id === interactionId);
     
     if (targetInteraction) {
       setSelectedInteraction(targetInteraction);
@@ -133,17 +227,37 @@ function AppContent() {
     }
   };
 
-  const handleStartCall = (interaction: any) => {
-    startCall({
-      customerName: interaction.customerName,
-      customerPhone: '+84 123 456 789',
-      customerEmail: interaction.customerEmail,
-      status: 'connected',
-      source: interaction.source || 'Unknown',
-      avatar: '👤',
-      interactionId: interaction.id
-    });
-  };
+  const handleStartCall = useCallback(async (interaction: any) => {
+    const phone = interaction.customerPhone || interaction.phone || '';
+    const destination = phone.replace(/[\s\-\(\)]/g, '');
+    if (callControl.isRegistered && destination) {
+      try {
+        await callControl.dial(destination);
+        startCall({
+          customerName: interaction.customerName,
+          customerPhone: phone,
+          customerEmail: interaction.customerEmail,
+          status: 'ringing',
+          source: 'Outbound Voice (SIP)',
+          avatar: '👤',
+          interactionId: interaction.id,
+        });
+      } catch (err) {
+        console.error('Dial failed:', err);
+      }
+    } else {
+      // Fallback: show widget with mock data if SIP not registered
+      startCall({
+        customerName: interaction.customerName,
+        customerPhone: phone || '+84 123 456 789',
+        customerEmail: interaction.customerEmail,
+        status: 'connected',
+        source: interaction.source || 'Unknown',
+        avatar: '👤',
+        interactionId: interaction.id,
+      });
+    }
+  }, [callControl, startCall]);
 
   const handleCallTransfer = () => {
     setTransferDialogOpen(true);
@@ -156,7 +270,7 @@ function AppContent() {
   const handleMaximizeCall = () => {
     if (currentCall?.interactionId) {
       const callInteraction = interactions.find(
-        item => item.id === currentCall.interactionId
+        (item: any) => item.id === currentCall.interactionId
       );
       if (callInteraction) {
         setSelectedInteraction(callInteraction);
@@ -266,111 +380,6 @@ function AppContent() {
   };
 
   // Demo: Simulate missed call
-  const simulateMissedCall = () => {
-    addMissedCall({
-      customerPhone: '+84 912 345 678',
-      customerName: 'Demo Customer',
-      missedAt: new Date(),
-      reason: 'timeout' as const,
-      isVIP: false,
-      source: 'Hotline (1900-1234)',
-      priority: 'medium' as const
-    });
-  };
-
-  // Demo: Simulate VIP missed call
-  const simulateVIPMissedCall = () => {
-    addMissedCall({
-      customerPhone: '+84 999 888 777',
-      customerName: 'Bà Nguyễn Thị VIP',
-      customerEmail: 'vip.customer@email.com',
-      missedAt: new Date(),
-      reason: 'timeout',
-      isVIP: true,
-      source: 'Hotline VIP (1900-5555)',
-      priority: 'urgent'
-    });
-  };
-
-  // Demo: Simulate multiple missed calls for Not Ready warning
-  const simulateMultipleMissedCalls = () => {
-    const calls = [
-      {
-        customerPhone: '+84 111 222 333',
-        customerName: 'Khách hàng 1',
-        missedAt: new Date(Date.now() - 2 * 60 * 1000),
-        reason: 'not-ready' as const,
-        source: 'Hotline (1900-1234)',
-        priority: 'medium' as const
-      },
-      {
-        customerPhone: '+84 444 555 666',
-        customerName: 'Khách hàng 2',
-        missedAt: new Date(Date.now() - 5 * 60 * 1000),
-        reason: 'not-ready' as const,
-        source: 'Hotline (1900-1234)',
-        priority: 'high' as const
-      },
-      {
-        customerPhone: '+84 777 888 999',
-        customerName: 'Khách hàng 3',
-        missedAt: new Date(Date.now() - 8 * 60 * 1000),
-        reason: 'not-ready' as const,
-        source: 'Hotline (1900-1234)',
-        priority: 'medium' as const
-      }
-    ];
-
-    calls.forEach(call => addMissedCall(call));
-  };
-
-  // Demo: Other notification types
-  const simulateTicketAssignment = () => {
-    addTicketAssignment({
-      ticketId: crypto.randomUUID(),
-      ticketNumber: 'TK-DEMO-001',
-      customerName: 'Demo Customer',
-      subject: 'Demo ticket',
-      assignedBy: 'Supervisor',
-      dueDate: new Date(Date.now() + 2 * 60 * 60 * 1000),
-      category: 'Báo lỗi',
-      priority: 'high' as const
-    });
-  };
-
-  const simulateTicketDue = () => {
-    addTicketDue({
-      ticketId: crypto.randomUUID(),
-      ticketNumber: 'TK-DEMO-002',
-      customerName: 'Demo Customer',
-      subject: 'Demo ticket due',
-      dueDate: new Date(Date.now() + 30 * 60 * 1000),
-      timeUntilDue: 30,
-      category: 'Báo lỗi',
-      priority: 'urgent' as const
-    });
-  };
-
-  const simulateSystemAlert = () => {
-    addSystemAlert({
-      alertType: 'maintenance' as const,
-      affectedSystems: ['Email System', 'CRM'],
-      duration: '2 hours',
-      actionRequired: true,
-      priority: 'high' as const
-    });
-  };
-
-  const simulateScheduleReminder = () => {
-    addScheduleReminder({
-      eventType: 'break' as const,
-      eventTime: new Date(Date.now() + 15 * 60 * 1000),
-      duration: 15,
-      location: 'Break Room',
-      priority: 'medium' as const
-    });
-  };
-
   // Keyboard shortcuts
   const handleKeyboardShortcuts = (e: KeyboardEvent) => {
     if (e.ctrlKey || e.metaKey) {
@@ -401,15 +410,18 @@ function AppContent() {
 
   return (
     <div className="h-screen flex flex-col bg-muted">
-      <EnhancedAgentHeader 
+      <EnhancedAgentHeader
         interactions={interactions as any}
         onChannelFilter={handleChannelFilter}
         activeChannelFilter={channelFilter}
         onViewCallDetails={handleViewCallDetails}
         onCallBack={handleCallBack}
         onViewTicket={handleViewTicket}
+        sipStatus={callControl.sipStatus}
+        bgProtection={callControl.bgProtection}
       />
-      
+      <ConnectionBanner />
+
       <div className="flex-1 flex overflow-hidden relative">
         {/* Left Panel - Interaction List */}
         <div className={`${
@@ -433,13 +445,18 @@ function AppContent() {
               </div>
             </div>
           ) : (
-            <InteractionList 
+            <InteractionList
               selectedId={selectedInteraction?.id}
               onSelectInteraction={handleSelectInteraction}
-              interactions={interactions as any}
+              interactions={activeCallInteraction
+                ? [activeCallInteraction, ...(interactions as any).filter((i: any) => i.id !== activeCallInteraction.id)]
+                : interactions as any}
               channelFilter={channelFilter}
               onChannelFilterChange={setChannelFilter}
               onCallBack={handleCallBack}
+              forceTab={activeCallInteraction
+                ? (callControl.hasActiveCall ? 'assigned' : 'queue')
+                : undefined}
             />
           )}
         </div>
@@ -462,10 +479,11 @@ function AppContent() {
 
         {/* Center Panel - Interaction Detail */}
         <div className="flex-1 flex flex-col">
-          <InteractionDetail 
+          <InteractionDetail
             interaction={selectedInteraction}
             onTransferCall={() => setTransferDialogOpen(true)}
             onCreateTicket={handleCreateTicket}
+            callControl={callControl}
           />
         </div>
 
@@ -543,16 +561,8 @@ function AppContent() {
         </div>
       </div>
 
-      {/* Floating Widgets */}
-      <FloatingCallWidget
-        callData={currentCall}
-        isVisible={isCallWidgetVisible}
-        onHangup={endCall}
-        onTransfer={handleCallTransfer}
-        onSurvey={handleCallSurvey}
-        onMaximize={handleMaximizeCall}
-        onHide={hideCallWidget}
-      />
+      {/* Softphone Bubble — global WebRTC phone UI */}
+      <SoftphoneBubble />
 
       {/* Floating Agent Status Widget (when panels collapsed) */}
       {leftPanelCollapsed && rightPanelCollapsed && (
@@ -564,6 +574,7 @@ function AppContent() {
         open={transferDialogOpen}
         onOpenChange={setTransferDialogOpen}
         customerName={selectedInteraction?.customerName || ''}
+        onTransferCall={async (dest, type) => { await callControl.transfer(dest, type); }}
       />
 
       {/* Keyboard Shortcuts Help */}
@@ -635,191 +646,25 @@ function AppContent() {
         </div>
       )}
 
-      {/* Demo Controls - Collapsible */}
-      <div className="fixed bottom-6 left-6 z-40 max-w-xs">
-        <div className="bg-background rounded-lg shadow-lg border transition-all duration-300 ease-in-out">
-          {/* Header with Toggle Button */}
-          <div className="flex items-center justify-between p-3 border-b border-border/50">
-            <h4 className="text-sm font-medium text-foreground">Demo Controls</h4>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={toggleDemoControls}
-              className="h-6 w-6 p-0 hover:bg-muted"
-            >
-              {demoControlsCollapsed ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-
-          {/* Collapsible Content */}
-          <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
-            demoControlsCollapsed ? 'max-h-0' : 'max-h-[600px]'
-          }`}>
-            <div className="p-3 space-y-2">
-              {/* Call Demo */}
-              <Button
-                onClick={() => handleStartCall(selectedInteraction)}
-                className="bg-green-600 hover:bg-green-700 text-white shadow-sm w-full"
-                size="sm"
-              >
-                <Phone className="h-4 w-4 mr-2" />
-                Start Call
-              </Button>
-
-              {/* Missed Call Demos */}
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  onClick={simulateMissedCall}
-                  className="bg-orange-600 hover:bg-orange-700 text-white text-xs"
-                  size="sm"
-                >
-                  <PhoneMissed className="h-3 w-3 mr-1" />
-                  Missed Call
-                </Button>
-                <Button
-                  onClick={simulateVIPMissedCall}
-                  className="bg-yellow-600 hover:bg-yellow-700 text-white text-xs"
-                  size="sm"
-                >
-                  <Crown className="h-3 w-3 mr-1" />
-                  VIP Call
-                </Button>
-              </div>
-
-              <Button
-                onClick={simulateMultipleMissedCalls}
-                variant="outline"
-                className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100 w-full text-xs"
-                size="sm"
-              >
-                3 Missed Calls
-              </Button>
-
-              {/* Other Notification Types */}
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  onClick={simulateTicketAssignment}
-                  variant="outline"
-                  className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 text-xs"
-                  size="sm"
-                >
-                  <Ticket className="h-3 w-3 mr-1" />
-                  Ticket
-                </Button>
-                <Button
-                  onClick={simulateScheduleReminder}
-                  variant="outline"
-                  className="bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100 text-xs"
-                  size="sm"
-                >
-                  <Calendar className="h-3 w-3 mr-1" />
-                  Schedule
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  onClick={simulateTicketDue}
-                  variant="outline"
-                  className="bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 text-xs"
-                  size="sm"
-                >
-                  Due Soon
-                </Button>
-                <Button
-                  onClick={simulateSystemAlert}
-                  variant="outline"
-                  className="bg-muted/50 border-border text-foreground/80 hover:bg-muted text-xs"
-                  size="sm"
-                >
-                  <Shield className="h-3 w-3 mr-1" />
-                  System
-                </Button>
-              </div>
-
-              <Button
-                onClick={() => setShowKeyboardShortcuts(true)}
-                variant="outline"
-                className="bg-background border-border w-full text-xs"
-                size="sm"
-              >
-                <Keyboard className="h-4 w-4 mr-2" />
-                Shortcuts
-              </Button>
-
-              {/* Core BFSI Demo */}
-              <div className="border-t pt-2 mt-2">
-                <p className="text-xs text-muted-foreground mb-2">Core BFSI Demo:</p>
-                <Button
-                  onClick={() => {
-                    // Switch to Core BFSI tab
-                    const tabElement = document.querySelector('[value="bfsi"]');
-                    if (tabElement) {
-                      (tabElement as HTMLElement).click();
-                    }
-                  }}
-                  variant="outline"
-                  className="bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100 w-full text-xs"
-                  size="sm"
-                >
-                  <Shield className="h-3 w-3 mr-1" />
-                  View BFSI
-                </Button>
-              </div>
-
-              {/* Ticket Demo Controls */}
-              <div className="border-t pt-2 mt-2">
-                <p className="text-xs text-muted-foreground mb-2">Ticket Demo:</p>
-                <div className="grid grid-cols-2 gap-2 mb-2">
-                  <Button
-                    onClick={() => handleViewTicket('TKT-001')}
-                    variant="outline"
-                    className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 text-xs"
-                    size="sm"
-                  >
-                    <Ticket className="h-3 w-3 mr-1" />
-                    TKT-001
-                  </Button>
-                  <Button
-                    onClick={() => handleViewTicket('TKT-002')}
-                    variant="outline"
-                    className="bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100 text-xs"
-                    size="sm"
-                  >
-                    <Ticket className="h-3 w-3 mr-1" />
-                    TKT-002
-                  </Button>
-                </div>
-                <Button
-                  onClick={() => setCustomerDefaultTab('tickets')}
-                  variant="outline"
-                  className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100 w-full text-xs"
-                  size="sm"
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  Focus Tickets Tab
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Keyboard shortcuts button (moved from demo controls) */}
     </div>
   );
 }
 
 export default function App() {
   return (
-    <NotificationProvider>
-      <EnhancedAgentStatusProvider agentId="AGT001" agentName="Agent Tung">
-        <CallProvider>
-          <AppContent />
-        </CallProvider>
-      </EnhancedAgentStatusProvider>
-    </NotificationProvider>
+    <ConnectionHubProvider>
+      <NotificationProvider>
+        <EnhancedAgentStatusProvider agentId="AGT001" agentName="Agent Tung">
+          <CallProvider>
+            <CallControlProvider>
+              <SoftphoneProvider>
+                <AppContent />
+              </SoftphoneProvider>
+            </CallControlProvider>
+          </CallProvider>
+        </EnhancedAgentStatusProvider>
+      </NotificationProvider>
+    </ConnectionHubProvider>
   );
 }

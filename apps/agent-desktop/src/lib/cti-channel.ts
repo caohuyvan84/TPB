@@ -21,7 +21,7 @@ class CtiChannel {
     this.disconnect();
     this.agentId = agentId;
 
-    this.socket = io(`${import.meta.env.VITE_WS_URL || 'ws://localhost:3019'}`, {
+    this.socket = io(`${import.meta.env.VITE_WS_URL || window.location.origin}`, {
       auth: { token },
       transports: ['websocket'],
     });

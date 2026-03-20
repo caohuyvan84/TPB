@@ -44,7 +44,7 @@ func BuildCDR(sess *Session) CDR {
 		DurationMs:    endedAt.Sub(sess.StartedAt).Milliseconds(),
 		HangupCause:   "NORMAL_CLEARING",
 		RecordingPath: sess.RecordingPath,
-		Direction:     "inbound",
+		Direction:     sess.Direction,
 	}
 
 	if sess.AnsweredAt != nil {

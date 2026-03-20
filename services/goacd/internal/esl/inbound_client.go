@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/textproto"
@@ -109,9 +110,66 @@ func (c *InboundClient) UUIDKill(uuid, cause string) (string, error) {
 	return c.API(fmt.Sprintf("uuid_kill %s %s", uuid, cause))
 }
 
+// OriginateWithUUID places an outbound call with explicit UUID and application.
+// Uses bgapi (async) to avoid blocking on slow originate.
+func (c *InboundClient) OriginateWithUUID(uuid, dialString, app, appArg string) (string, error) {
+	appStr := app
+	if appArg != "" {
+		appStr = fmt.Sprintf("%s(%s)", app, appArg)
+	}
+	cmd := fmt.Sprintf("originate {origination_uuid=%s}%s &%s", uuid, dialString, appStr)
+	return c.BGApi(cmd)
+}
+
+// UUIDExists checks if a channel UUID exists.
+func (c *InboundClient) UUIDExists(uuid string) (bool, error) {
+	resp, err := c.API(fmt.Sprintf("uuid_exists %s", uuid))
+	if err != nil {
+		return false, err
+	}
+	// Extract body from ESL response
+	body := resp
+	if idx := strings.Index(resp, "\n\n"); idx >= 0 {
+		body = resp[idx+2:]
+	}
+	return strings.Contains(strings.TrimSpace(body), "true"), nil
+}
+
+// UUIDGetVar gets a channel variable. Returns only the value (strips ESL headers).
+func (c *InboundClient) UUIDGetVar(uuid, varName string) (string, error) {
+	resp, err := c.API(fmt.Sprintf("uuid_getvar %s %s", uuid, varName))
+	if err != nil {
+		return "", err
+	}
+	// ESL response: "Content-Type: api/response\nContent-Length: N\n\nVALUE"
+	// Extract just the body after the blank line
+	if idx := strings.Index(resp, "\n\n"); idx >= 0 {
+		return strings.TrimSpace(resp[idx+2:]), nil
+	}
+	// Or after last newline in headers
+	lines := strings.Split(strings.TrimSpace(resp), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line != "" && !strings.HasPrefix(line, "Content-") {
+			return line, nil
+		}
+	}
+	return strings.TrimSpace(resp), nil
+}
+
 // Subscribe subscribes to ESL events.
 func (c *InboundClient) Subscribe(events string) (string, error) {
 	return c.sendCmd(fmt.Sprintf("event plain %s", events))
+}
+
+// Host returns the configured host:port.
+func (c *InboundClient) Host() string { return c.host }
+
+// IsConnected returns true if the ESL connection is alive.
+func (c *InboundClient) IsConnected() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.conn != nil
 }
 
 // Close closes the connection.
@@ -132,7 +190,7 @@ func (c *InboundClient) sendCmd(cmd string) (string, error) {
 		return "", fmt.Errorf("not connected")
 	}
 
-	c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	_, err := fmt.Fprintf(c.conn, "%s\n\n", cmd)
 	if err != nil {
 		return "", err
@@ -142,18 +200,33 @@ func (c *InboundClient) sendCmd(cmd string) (string, error) {
 }
 
 func (c *InboundClient) readResponse() (string, error) {
-	c.conn.SetReadDeadline(time.Now().Add(10 * time.Second))
-	var resp strings.Builder
+	c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	var headers strings.Builder
+	contentLength := 0
 	for {
 		line, err := c.rdr.ReadLine()
 		if err != nil {
-			return resp.String(), err
+			return headers.String(), err
 		}
 		if line == "" {
-			break
+			break // end of headers
 		}
-		resp.WriteString(line)
-		resp.WriteString("\n")
+		headers.WriteString(line)
+		headers.WriteString("\n")
+		// Parse Content-Length header
+		if strings.HasPrefix(line, "Content-Length:") {
+			parts := strings.TrimSpace(strings.TrimPrefix(line, "Content-Length:"))
+			fmt.Sscanf(parts, "%d", &contentLength)
+		}
 	}
-	return resp.String(), nil
+	// Read body if Content-Length > 0
+	if contentLength > 0 {
+		body := make([]byte, contentLength)
+		_, err := io.ReadFull(c.rdr.R, body)
+		if err != nil {
+			return headers.String(), err
+		}
+		headers.WriteString(string(body))
+	}
+	return headers.String(), nil
 }

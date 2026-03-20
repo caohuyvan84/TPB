@@ -44,7 +44,7 @@ export class CtiService {
   async hangupCall(tenantId: string, callId: string) {
     const adapter = await this.getAdapter(tenantId);
     await adapter.hangupCall(callId);
-    this.ctiEvents.broadcastCallEvent('call:ended', { callId, tenantId });
+    // Don't broadcast call:ended here — GoACD will publish via Kafka when call actually ends
     return { success: true };
   }
 

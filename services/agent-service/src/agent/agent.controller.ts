@@ -19,9 +19,17 @@ export class AgentController {
 
   @Get('me')
   async getMe(@Req() req: Request) {
-    const user = (req as any).user;
-    const userId = user?.sub || user?.id || '00000000-0000-0000-0000-000000000001';
-    const displayName = user?.fullName || user?.username || 'Agent';
+    // Extract user from JWT (no guard — decode from Authorization header)
+    let userId = '00000000-0000-0000-0000-000000000001';
+    let displayName = 'Agent';
+    const authHeader = req.headers['authorization'];
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const payload = JSON.parse(Buffer.from(authHeader.split('.')[1], 'base64').toString());
+        userId = payload.sub || userId;
+        displayName = payload.username || displayName;
+      } catch { /* ignore decode errors */ }
+    }
     return this.agentService.getAgentProfile(userId, displayName);
   }
 

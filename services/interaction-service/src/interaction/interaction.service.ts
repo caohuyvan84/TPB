@@ -67,6 +67,16 @@ export class InteractionService {
     return saved;
   }
 
+  /* ── Find by metadata callId ────────────────────── */
+
+  async findByMetadataCallId(callId: string) {
+    // JSONB query: metadata->>'callId' = callId
+    return this.interactionRepo
+      .createQueryBuilder('i')
+      .where("i.metadata->>'callId' = :callId", { callId })
+      .getMany();
+  }
+
   /* ── List with cursor pagination ─────────────────── */
 
   async listInteractions(filters: {

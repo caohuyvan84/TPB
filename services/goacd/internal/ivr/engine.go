@@ -17,12 +17,15 @@ type MenuOption struct {
 
 // SimpleIVR implements a basic IVR: answer → play welcome → collect digit → route to queue.
 type SimpleIVR struct {
-	WelcomeFile string
-	MenuFile    string
-	InvalidFile string
-	Options     []MenuOption
+	WelcomeFile  string
+	MenuFile     string
+	InvalidFile  string
+	Options      []MenuOption
 	DefaultQueue string
-	Logger      *slog.Logger
+	Logger       *slog.Logger
+
+	// OnDigit is called when a DTMF digit is collected. Used for call timeline events.
+	OnDigit func(digit string, menuLabel string, attempts int)
 }
 
 // Run executes the IVR flow on an outbound ESL connection.
@@ -54,21 +57,24 @@ func (ivr *SimpleIVR) Run(ctx context.Context, conn *esl.OutboundConn) (string, 
 		ivr.Logger.Warn("IVR digit collection failed", "err", err)
 	}
 
-	// Step 4: Read the collected digit from channel variable
-	// In outbound ESL, the variable is set after execute completes.
-	// For MVP, parse from response or use default.
 	digit := parseDigitFromResponse(resp)
-
 	ivr.Logger.Info("IVR selection", "digit", digit, "caller", conn.CallerNumber())
 
-	// Step 5: Map digit to queue
+	// Step 4: Map digit to queue + notify callback
 	for _, opt := range ivr.Options {
 		if opt.Digit == digit {
+			if ivr.OnDigit != nil {
+				ivr.OnDigit(digit, opt.Label, 1)
+			}
 			return opt.Queue, nil
 		}
 	}
 
-	// Default queue
+	// Default queue — digit didn't match any option
+	if ivr.OnDigit != nil {
+		ivr.OnDigit(digit, "default", 1)
+	}
+
 	if ivr.DefaultQueue != "" {
 		return ivr.DefaultQueue, nil
 	}
@@ -77,10 +83,6 @@ func (ivr *SimpleIVR) Run(ctx context.Context, conn *esl.OutboundConn) (string, 
 }
 
 func parseDigitFromResponse(resp string) string {
-	// In ESL outbound mode, after play_and_get_digits the variable
-	// is stored in the channel. For MVP, we treat "1"-"9" as valid.
-	// A full implementation would read the variable via getVariable.
-	// For now, return "1" as default if parsing fails.
 	for _, c := range resp {
 		if c >= '1' && c <= '9' {
 			return string(c)

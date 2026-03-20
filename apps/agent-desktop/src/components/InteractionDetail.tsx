@@ -649,9 +649,9 @@ SĐT: 0987 654 321`,
   }
 };
 
-export function InteractionDetail({ interaction, onTransferCall, onCreateTicket }: InteractionDetailProps) {
+export function InteractionDetail({ interaction, onTransferCall, onCreateTicket, callControl }: InteractionDetailProps & { callControl?: any }) {
   const [isOnHold, setIsOnHold] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const isMuted = callControl?.isMuted ?? false;
   const [chatMessage, setChatMessage] = useState('');
   const [chatExpanded, setChatExpanded] = useState(false);
   
@@ -1589,31 +1589,32 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
     
     return (
       <div className="space-y-4">
-        {/* Real-time call controls for active calls - Sticky at top */}
+        {/* Real-time call controls — only when there's a LIVE SIP call */}
+        {callControl?.hasActiveCall && (
         <div className="sticky top-0 z-10 bg-background pb-4 -mt-4 pt-4">
           <div className="flex items-center justify-center space-x-4 p-4 bg-gradient-to-r from-[#155DFC]/5 to-blue-50 border-2 border-[#155DFC]/20 rounded-lg shadow-sm">
             <Button
               variant={isMuted ? "default" : "outline"}
               size="sm"
-              onClick={() => setIsMuted(!isMuted)}
+              onClick={() => { if (callControl) callControl.toggleMute(); }}
               className={isMuted ? "bg-red-600 hover:bg-red-700 text-white" : ""}
               title={isMuted ? "Bật mic" : "Tắt mic"}
             >
               {isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
               <span className="ml-1 hidden sm:inline">{isMuted ? "Muted" : "Mute"}</span>
             </Button>
-            
+
             <Button
               variant={isOnHold ? "default" : "outline"}
               size="sm"
-              onClick={() => setIsOnHold(!isOnHold)}
+              onClick={() => { if (callControl) callControl.toggleHold(); setIsOnHold(!isOnHold); }}
               className={isOnHold ? "bg-yellow-600 hover:bg-yellow-700 text-white" : ""}
               title={isOnHold ? "Tiếp tục cuộc gọi" : "Giữ máy"}
             >
               {isOnHold ? <Phone className="h-4 w-4" /> : <Phone className="h-4 w-4" />}
               <span className="ml-1">{isOnHold ? "On Hold" : "Hold"}</span>
             </Button>
-            
+
             <Button
               variant="outline"
               size="sm"
@@ -1623,11 +1624,11 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
               <PhoneForwarded className="h-4 w-4" />
               <span className="ml-1 hidden sm:inline">Transfer</span>
             </Button>
-            
+
             <Button
               variant="destructive"
               size="sm"
-              onClick={() => console.log('End call')}
+              onClick={() => { if (callControl) callControl.hangup(); }}
               title="Kết thúc cuộc gọi"
             >
               <PhoneOff className="h-4 w-4" />
@@ -1635,6 +1636,7 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
             </Button>
           </div>
         </div>
+        )}
 
         {/* Callbot Context Information */}
         {callbotData && (
@@ -2179,17 +2181,27 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket 
                 {interaction.type === 'call' && (
                   <div className="space-y-4">
                     <div className="flex items-center space-x-2 mb-4">
-                      <Phone className="h-5 w-5 text-green-600" />
+                      <Phone className={`h-5 w-5 ${interaction.status === 'in-progress' || interaction.status === 'ringing' ? 'text-green-600' : 'text-muted-foreground'}`} />
                       <h3 className="text-lg font-medium">
-                        {interaction.status === 'completed' ? 'Cuộc gọi đã hoàn thành' : 'Cuộc gọi đang diễn ra'}
+                        {interaction.status === 'in-progress' || interaction.status === 'ringing' ? 'Cuộc gọi đang diễn ra' :
+                         interaction.status === 'completed' ? 'Cuộc gọi đã hoàn thành' :
+                         interaction.status === 'closed' ? 'Cuộc gọi đã đóng' :
+                         interaction.status === 'resolved' ? 'Cuộc gọi đã xử lý' :
+                         interaction.status === 'new' ? 'Cuộc gọi mới' :
+                         'Chi tiết cuộc gọi'}
                       </h3>
                       <Badge className={`${
-                        interaction.status === 'completed' ? 'bg-green-100 text-green-800 border-green-200' :
-                        interaction.status === 'in-progress' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                        interaction.status === 'completed' || interaction.status === 'resolved' ? 'bg-green-100 text-green-800 border-green-200' :
+                        interaction.status === 'in-progress' || interaction.status === 'ringing' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                        interaction.status === 'closed' ? 'bg-gray-100 text-gray-800 border-gray-200' :
                         'bg-muted text-foreground border-border'
                       }`}>
                         {interaction.status === 'completed' ? 'Hoàn thành' :
-                         interaction.status === 'in-progress' ? 'Đang diễn ra' : interaction.status}
+                         interaction.status === 'in-progress' ? 'Đang diễn ra' :
+                         interaction.status === 'closed' ? 'Đã đóng' :
+                         interaction.status === 'resolved' ? 'Đã xử lý' :
+                         interaction.status === 'ringing' ? 'Đang đổ chuông' :
+                         interaction.status}
                       </Badge>
                     </div>
 

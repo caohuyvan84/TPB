@@ -36,10 +36,15 @@ interface FloatingCallWidgetProps {
   callData: CallData | null;
   isVisible: boolean;
   onHangup: () => void;
+  onAnswer?: () => void;
   onTransfer: () => void;
   onSurvey: () => void;
   onMaximize: () => void;
   onHide: () => void;
+  onToggleMute?: () => void;
+  onToggleHold?: () => void;
+  isMuted?: boolean;
+  sipStatus?: string;
   className?: string;
 }
 
@@ -47,15 +52,20 @@ export function FloatingCallWidget({
   callData,
   isVisible,
   onHangup,
+  onAnswer,
   onTransfer,
   onSurvey,
   onMaximize,
   onHide,
+  onToggleMute,
+  onToggleHold,
+  isMuted: externalMuted,
+  sipStatus,
   className = ""
 }: FloatingCallWidgetProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isOnHold, setIsOnHold] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const isMuted = externalMuted ?? false;
   const [isSpeakerOn, setIsSpeakerOn] = useState(false);
   const [callDuration, setCallDuration] = useState('00:00');
 
@@ -106,13 +116,16 @@ export function FloatingCallWidget({
   };
 
   const handleToggleHold = () => {
+    if (onToggleHold) {
+      onToggleHold();
+    }
     setIsOnHold(!isOnHold);
-    // In real app, this would call API to hold/unhold
   };
 
   const handleToggleMute = () => {
-    setIsMuted(!isMuted);
-    // In real app, this would call API to mute/unmute
+    if (onToggleMute) {
+      onToggleMute();
+    }
   };
 
   const handleToggleSpeaker = () => {
@@ -300,21 +313,50 @@ export function FloatingCallWidget({
               </div>
             </div>
 
-            {/* End Call - Prominent */}
+            {/* Answer / End Call */}
             <Separator className="my-4" />
             <div className="flex space-x-2">
-              <Button 
-                variant="destructive" 
-                size="sm"
-                onClick={(e: React.MouseEvent) => {
-                  e.stopPropagation();
-                  onHangup();
-                }}
-                className="flex-1"
-              >
-                <PhoneOff className="h-4 w-4 mr-2" />
-                Kết thúc cuộc gọi
-              </Button>
+              {callData.status === 'ringing' && onAnswer ? (
+                <>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      onAnswer();
+                    }}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    <Phone className="h-4 w-4 mr-2" />
+                    Trả lời
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      onHangup();
+                    }}
+                    className="flex-1"
+                  >
+                    <PhoneOff className="h-4 w-4 mr-2" />
+                    Từ chối
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    onHangup();
+                  }}
+                  className="flex-1"
+                >
+                  <PhoneOff className="h-4 w-4 mr-2" />
+                  Kết thúc cuộc gọi
+                </Button>
+              )}
               
               <Button 
                 variant="ghost" 

@@ -50,6 +50,84 @@ func (r *Reconciler) Stop() {
 	close(r.stopCh)
 }
 
+// StartStaleReaper runs a fast 15s loop to release agents stuck in ringing/originating > 35s.
+func (r *Reconciler) StartStaleReaper(ctx context.Context) {
+	r.logger.Info("Stale claim reaper started", "interval", "15s", "threshold", "35s")
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-r.stopCh:
+			return
+		case <-ticker.C:
+			r.reapStaleClaims(ctx)
+		}
+	}
+}
+
+func (r *Reconciler) reapStaleClaims(ctx context.Context) {
+	// Scan ALL agent keys (not just available set — stuck agents are NOT in available set)
+	var cursor uint64
+	for {
+		keys, nextCursor, err := r.rdb.Scan(ctx, cursor, hashPrefix+"*", 100).Result()
+		if err != nil {
+			return
+		}
+		for _, key := range keys {
+			state, err := r.rdb.HGetAll(ctx, key).Result()
+			if err != nil || len(state) == 0 {
+				continue
+			}
+
+			status := state["status"]
+			if status != StateRinging && status != StateOriginating {
+				continue
+			}
+
+			changedAt := state["status_changed_at"]
+			if changedAt == "" {
+				continue
+			}
+
+			// status_changed_at is stored as Unix seconds (from Redis TIME[1]) or milliseconds
+			ts := parseInt64(changedAt)
+			if ts == 0 {
+				continue
+			}
+			// Detect if timestamp is in seconds or milliseconds
+			nowMs := time.Now().UnixMilli()
+			if ts < 1e12 { // seconds (< year ~33658 in seconds)
+				ts = ts * 1000 // convert to ms
+			}
+			ageSec := float64(nowMs-ts) / 1000.0
+			if ageSec > 35 {
+				agentID := key[len(hashPrefix):]
+				r.logger.Warn("Stale claim reaper: releasing stuck agent",
+					"agent", agentID, "status", status, "ageSec", ageSec)
+				r.state.ReleaseAgent(ctx, agentID, StateReady, "voice")
+			}
+		}
+
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+}
+
+func parseInt64(s string) int64 {
+	var n int64
+	for _, c := range s {
+		if c >= '0' && c <= '9' {
+			n = n*10 + int64(c-'0')
+		}
+	}
+	return n
+}
+
 func (r *Reconciler) reconcile(ctx context.Context) {
 	r.logger.Debug("Running agent state reconciliation")
 

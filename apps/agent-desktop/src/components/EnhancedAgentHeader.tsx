@@ -40,15 +40,19 @@ interface EnhancedAgentHeaderProps {
   onViewCallDetails?: (callId: string) => void;
   onCallBack?: (callId: string) => void;
   onViewTicket?: (ticketId: string) => void;
+  sipStatus?: string;
+  bgProtection?: 'stopped' | 'running' | 'suspended';
 }
 
-export function EnhancedAgentHeader({ 
-  interactions = [], 
-  onChannelFilter, 
+export function EnhancedAgentHeader({
+  interactions = [],
+  onChannelFilter,
   activeChannelFilter = 'all',
   onViewCallDetails,
   onCallBack,
-  onViewTicket
+  onViewTicket,
+  sipStatus,
+  bgProtection
 }: EnhancedAgentHeaderProps) {
   const [agentStatus, setAgentStatus] = useState<'available' | 'busy' | 'away' | 'offline'>('available');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -57,14 +61,15 @@ export function EnhancedAgentHeader({
   const { currentCall, isCallWidgetVisible, showCallWidget, endCall } = useCall();
   
   // Enhanced agent status context
-  const { 
-    agentState, 
+  const {
+    agentState,
+    voiceCallState,
     connectionStatus,
     formatDuration,
     getTotalReadyTime,
     getTotalNotReadyTime,
     getReadyChannelsCount,
-    getTotalChannelsCount 
+    getTotalChannelsCount
   } = useEnhancedAgentStatus();
 
   // Notifications context - Updated function names
@@ -196,10 +201,9 @@ export function EnhancedAgentHeader({
           <div className="flex items-center space-x-2 px-3 py-1 bg-blue-50 rounded-md border border-blue-200">
             <Filter className="h-3 w-3 text-blue-600" />
             <span className="text-sm text-blue-700">
-              Lọc: {
-                activeChannelFilter === 'voice' ? 'Cuộc g��i' :
-                activeChannelFilter === 'email' ? 'Email' : 'Chat'
-              }
+              {'L\u1ECDc: '}
+              {activeChannelFilter === 'voice' ? 'Voice' :
+                activeChannelFilter === 'email' ? 'Email' : 'Chat'}
             </span>
             <Button
               variant="ghost"
@@ -225,8 +229,43 @@ export function EnhancedAgentHeader({
         {/* Enhanced Agent Status Widget */}
         <AgentStatusWidget position="header" />
 
-        {/* Call Status (if active) */}
-        {currentCall && (
+        {/* Voice Call State from GoACD */}
+        {voiceCallState && voiceCallState !== 'ready' && (
+          <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg border ${
+            voiceCallState === 'on_call' ? 'bg-green-50 border-green-200' :
+            voiceCallState === 'ringing' ? 'bg-yellow-50 border-yellow-200' :
+            voiceCallState === 'originating' ? 'bg-blue-50 border-blue-200' :
+            voiceCallState === 'acw' ? 'bg-orange-50 border-orange-200' :
+            'bg-muted border-border'
+          }`}>
+            <div className={`w-2 h-2 rounded-full ${
+              voiceCallState === 'on_call' ? 'bg-green-500' :
+              voiceCallState === 'ringing' ? 'bg-yellow-500 animate-pulse' :
+              voiceCallState === 'originating' ? 'bg-blue-500 animate-pulse' :
+              voiceCallState === 'acw' ? 'bg-orange-500' : 'bg-gray-400'
+            }`} />
+            <Phone className={`h-3.5 w-3.5 ${
+              voiceCallState === 'on_call' ? 'text-green-600' :
+              voiceCallState === 'ringing' ? 'text-yellow-600' :
+              voiceCallState === 'originating' ? 'text-blue-600' :
+              'text-orange-600'
+            }`} />
+            <span className={`text-xs font-medium ${
+              voiceCallState === 'on_call' ? 'text-green-800' :
+              voiceCallState === 'ringing' ? 'text-yellow-800' :
+              voiceCallState === 'originating' ? 'text-blue-800' :
+              'text-orange-800'
+            }`}>
+              {voiceCallState === 'on_call' ? 'Đang gọi' :
+               voiceCallState === 'ringing' ? 'Đang đổ chuông' :
+               voiceCallState === 'originating' ? 'Đang kết nối...' :
+               voiceCallState === 'acw' ? 'Sau cuộc gọi' : voiceCallState}
+            </span>
+          </div>
+        )}
+
+        {/* Call Status (if active — legacy) */}
+        {currentCall && !voiceCallState?.match(/ringing|originating|on_call|acw/) && (
           <div className="flex items-center space-x-3 px-4 py-2 bg-green-50 rounded-lg border border-green-200">
             <div className="flex items-center space-x-2">
               <div className="relative">
@@ -303,11 +342,50 @@ export function EnhancedAgentHeader({
           </div>
         </div>
 
+        {/* SIP Status Indicator */}
+        {sipStatus && (
+          <div className={`flex items-center space-x-1.5 px-2 py-1 rounded text-xs font-medium ${
+            sipStatus === 'registered'
+              ? 'bg-green-100 text-green-800'
+              : sipStatus === 'connecting'
+              ? 'bg-yellow-100 text-yellow-800'
+              : sipStatus === 'error'
+              ? 'bg-red-100 text-red-800'
+              : 'bg-gray-100 text-gray-600'
+          }`}>
+            <div className={`w-2 h-2 rounded-full ${
+              sipStatus === 'registered' ? 'bg-green-500' :
+              sipStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+              sipStatus === 'error' ? 'bg-red-500' : 'bg-gray-400'
+            }`} />
+            <Phone className="h-3 w-3" />
+            <span>{sipStatus === 'registered' ? 'SIP' : sipStatus === 'connecting' ? 'SIP...' : sipStatus === 'error' ? 'SIP Err' : 'SIP Off'}</span>
+          </div>
+        )}
+
+        {/* Background Protection Indicator */}
+        {sipStatus === 'registered' && bgProtection && (
+          <div className={`flex items-center space-x-1 px-2 py-1 rounded text-xs font-medium ${
+            bgProtection === 'running'
+              ? 'bg-emerald-100 text-emerald-700'
+              : bgProtection === 'suspended'
+              ? 'bg-amber-100 text-amber-700'
+              : 'bg-gray-100 text-gray-500'
+          }`} title={
+            bgProtection === 'running' ? 'Background protection ON — tab sẽ nhận cuộc gọi khi ở background'
+            : bgProtection === 'suspended' ? 'Background protection chưa kích hoạt — click vào trang để bật'
+            : 'Background protection OFF'
+          }>
+            <Volume2 className="h-3 w-3" />
+            <span>{bgProtection === 'running' ? 'BG' : bgProtection === 'suspended' ? 'BG!' : ''}</span>
+          </div>
+        )}
+
         {/* Connection Status Indicator */}
         {connectionStatus !== 'connected' && (
           <div className={`px-2 py-1 rounded text-xs font-medium ${
-            connectionStatus === 'disconnected' 
-              ? 'bg-red-100 text-red-800' 
+            connectionStatus === 'disconnected'
+              ? 'bg-red-100 text-red-800'
               : 'bg-yellow-100 text-yellow-800'
           }`}>
             {connectionStatus === 'disconnected' ? 'Offline' : 'Reconnecting...'}
@@ -338,7 +416,7 @@ export function EnhancedAgentHeader({
               <div className="flex items-center space-x-2">
                 <div className="relative">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src="/api/placeholder/32/32" />
+                    <AvatarImage src="" />
                     <AvatarFallback>{agentState.agentName.charAt(0)}</AvatarFallback>
                   </Avatar>
                   <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${

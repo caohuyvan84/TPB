@@ -19,6 +19,7 @@ import (
 	"github.com/tpb/goacd/internal/event"
 	"github.com/tpb/goacd/internal/ivr"
 	"github.com/tpb/goacd/internal/queue"
+	"github.com/tpb/goacd/internal/routing"
 )
 
 func main() {
@@ -47,6 +48,7 @@ func main() {
 	// ── Core services ─────────────────────────────────
 	agentState := agent.NewStateManager(rdb, logger)
 	queueMgr := queue.NewManager(rdb, logger)
+	scorer := routing.NewScorer(rdb)
 	sessions := call.NewSessionStore()
 	publisher := event.NewPublisher(cfg.KafkaBrokers, logger)
 	defer publisher.Close()
@@ -61,9 +63,9 @@ func main() {
 
 	// ── IVR config ────────────────────────────────────
 	ivrConfig := &ivr.SimpleIVR{
-		WelcomeFile: "ivr/ivr-welcome_to_company.wav",
-		MenuFile:    "ivr/ivr-generic_greeting.wav",
-		InvalidFile: "ivr/ivr-that_was_an_invalid_entry.wav",
+		WelcomeFile: "tone_stream://%(500,0,800);%(500,0,600);%(1000,0,400)",  // welcome beeps
+		MenuFile:    "tone_stream://%(200,0,800);%(200,100,600);%(200,100,400)", // menu beeps
+		InvalidFile: "tone_stream://%(100,0,200);%(100,0,200)",                  // error beeps
 		Options: []ivr.MenuOption{
 			{Digit: "1", Queue: "sales", Label: "Sales"},
 			{Digit: "2", Queue: "support", Label: "Technical Support"},
@@ -76,7 +78,7 @@ func main() {
 	// ── ESL outbound server (FreeSWITCH → GoACD per-call) ──
 	eslAddr := fmt.Sprintf("0.0.0.0:%d", cfg.ESLListenPort)
 	eslServer := esl.NewOutboundServer(eslAddr, func(callCtx context.Context, conn *esl.OutboundConn) {
-		handleInboundCall(callCtx, conn, ivrConfig, agentState, queueMgr, sessions, publisher, cfg, logger)
+		handleInboundCall(callCtx, conn, ivrConfig, agentState, queueMgr, scorer, sessions, publisher, eslClients, cfg, logger)
 	}, logger)
 
 	go func() {
@@ -93,8 +95,16 @@ func main() {
 		}
 	}()
 
+	// ── Agent reconciler + stale claim reaper ────────
+	reconciler := agent.NewReconciler(rdb, agentState, logger)
+	go reconciler.Start(ctx)
+	go reconciler.StartStaleReaper(ctx)
+
+	// ── Outbound call manager ────────────────────────
+	outboundMgr := call.NewOutboundCallManager(eslClients, agentState, sessions, publisher, cfg.SIPDomain, cfg.PSTNGateway, cfg.KafkaBrokers, logger)
+
 	// ── gRPC/HTTP server (CTI Adapter integration) ────
-	grpcServer := api.NewGRPCServer(cfg.GRPCPort, agentState, sessions, eslClients, cfg.SIPDomain, logger)
+	grpcServer := api.NewGRPCServer(cfg.GRPCPort, agentState, sessions, eslClients, outboundMgr, cfg.SIPDomain, cfg.TURNSecret, cfg.TURNTTL, logger)
 	go func() {
 		if err := grpcServer.Start(); err != nil {
 			logger.Error("gRPC server failed", "err", err)
@@ -111,11 +121,22 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
-	logger.Info("Shutdown signal received")
-	cancel()
+	logger.Info("Shutdown signal received", "activeCalls", sessions.Count())
+	cancel() // stop accepting new ESL connections
 
-	// Wait for ESL connections to drain
-	eslServer.Wait()
+	// Graceful drain: wait for active calls to finish (max 60s)
+	drainDone := make(chan struct{})
+	go func() {
+		eslServer.Wait()
+		close(drainDone)
+	}()
+
+	select {
+	case <-drainDone:
+		logger.Info("All active calls drained")
+	case <-time.After(60 * time.Second):
+		logger.Warn("Drain timeout (60s), forcing shutdown", "remainingCalls", sessions.Count())
+	}
 
 	// Close ESL inbound clients
 	for _, c := range eslClients {
@@ -127,14 +148,17 @@ func main() {
 }
 
 // handleInboundCall is the per-call handler for outbound ESL connections.
+// Implements: IVR → queue → 5-factor scoring → top-3 re-route → call.routing event → bridge.
 func handleInboundCall(
 	ctx context.Context,
 	conn *esl.OutboundConn,
 	ivrCfg *ivr.SimpleIVR,
 	agentState *agent.StateManager,
 	queueMgr *queue.Manager,
+	scorer *routing.Scorer,
 	sessions *call.SessionStore,
 	publisher *event.Publisher,
+	eslClients []*esl.InboundClient,
 	cfg *config.Config,
 	logger *slog.Logger,
 ) {
@@ -144,23 +168,77 @@ func handleInboundCall(
 		CallerName:   conn.CallerName(),
 		DestNumber:   conn.DestNumber(),
 		State:        "ivr",
+		Direction:    "inbound",
 		StartedAt:    time.Now(),
 	}
 	sessions.Add(sess)
+
+	pub := func(topic string, data interface{}) {
+		publisher.Publish(context.Background(), cfg.KafkaBrokers, topic, data, sess.UUID)
+	}
+
+	// Timeline event publisher — call.timeline topic for detailed call flow history
+	pubTimeline := func(eventType string, data map[string]interface{}) {
+		pub("call.timeline", map[string]interface{}{
+			"callId":    sess.UUID,
+			"eventType": eventType,
+			"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
+			"data":      data,
+		})
+	}
+
+	// Structured call lifecycle logger
+	callLog := func(step string, detail ...interface{}) {
+		fields := []interface{}{"callId", sess.UUID, "step", step, "caller", sess.CallerNumber}
+		fields = append(fields, detail...)
+		logger.Info("CALL_LIFECYCLE", fields...)
+	}
+	callLog("CALL_START", "dest", sess.DestNumber)
+
+	// Timeline: call started
+	pubTimeline("call_started", map[string]interface{}{
+		"callerNumber": sess.CallerNumber, "destNumber": sess.DestNumber, "direction": "inbound",
+	})
+
 	defer func() {
 		now := time.Now()
 		sess.EndedAt = &now
 		sess.State = "ended"
 
-		// Generate and publish CDR
-		cdr := call.BuildCDR(sess)
-		publisher.Publish(ctx, cfg.KafkaBrokers, "cdr.created", cdr, sess.UUID)
+		// Timeline: call ended with enriched data
+		talkTimeMs := int64(0)
+		if sess.AnsweredAt != nil {
+			talkTimeMs = now.Sub(*sess.AnsweredAt).Milliseconds()
+		}
+		pubTimeline("ended", map[string]interface{}{
+			"hangupCause":    "NORMAL_CLEARING",
+			"hangupBy":       "unknown",
+			"talkTimeMs":     talkTimeMs,
+			"totalDurationMs": now.Sub(sess.StartedAt).Milliseconds(),
+			"agentId":        sess.AssignedAgent,
+		})
 
+		cdr := call.BuildCDR(sess)
+		pub("cdr.created", cdr)
+		pub("call.ended", map[string]interface{}{
+			"callId": sess.UUID, "agentId": sess.AssignedAgent, "direction": "inbound",
+		})
 		sessions.Remove(sess.UUID)
 		logger.Info("Call ended", "uuid", sess.UUID, "duration", now.Sub(sess.StartedAt))
 	}()
 
-	// Phase 1: IVR
+	// ── Phase 1: IVR ─────────────────────────────────
+	// Timeline: IVR started
+	ivrStart := time.Now()
+	pubTimeline("ivr_started", map[string]interface{}{"welcomeMessage": ivrCfg.WelcomeFile})
+
+	// Wire IVR digit callback for timeline
+	ivrCfg.OnDigit = func(digit string, menuLabel string, attempts int) {
+		pubTimeline("ivr_digit", map[string]interface{}{
+			"digit": digit, "menuLabel": menuLabel, "attempts": attempts,
+		})
+	}
+
 	selectedQueue, err := ivrCfg.Run(ctx, conn)
 	if err != nil {
 		logger.Error("IVR failed", "uuid", sess.UUID, "err", err)
@@ -170,76 +248,297 @@ func handleInboundCall(
 
 	sess.Queue = selectedQueue
 	sess.IVRSelection = selectedQueue
+	callLog("IVR_DONE", "queue", selectedQueue)
 	sess.State = "queued"
 
-	// Phase 2: Queue + find agent
+	// Timeline: IVR completed
+	pubTimeline("ivr_completed", map[string]interface{}{
+		"selectedQueue": selectedQueue, "durationMs": time.Since(ivrStart).Milliseconds(),
+	})
+
 	queueMgr.Enqueue(ctx, selectedQueue, sess.UUID, 0)
-
-	// Play MOH while waiting
 	go conn.Playback("local_stream://moh")
+	callLog("QUEUED", "queue", selectedQueue)
 
-	// Try to find an available agent (poll every 2s, max 60s)
-	var assignedAgent string
-	for i := 0; i < 30; i++ {
+	// Timeline: queued
+	pubTimeline("queued", map[string]interface{}{
+		"queue": selectedQueue, "position": 1,
+	})
+
+	// ── Phase 2: Find agents with 5-factor scoring ───
+	const maxRetries = 3
+	const pollInterval = 2 * time.Second
+	const pollMaxRounds = 30 // 60s total
+
+	var candidates []routing.ScoredAgent
+
+	for round := 0; round < pollMaxRounds; round++ {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(2 * time.Second):
+		case <-time.After(pollInterval):
 		}
 
-		agents, err := agentState.GetAvailableAgents(ctx, "voice")
-		if err != nil || len(agents) == 0 {
+		available, err := agentState.GetAvailableAgents(ctx, "voice")
+		if err != nil || len(available) == 0 {
 			continue
 		}
 
-		// Try to claim first available agent
-		for _, agentID := range agents {
-			claimed, err := agentState.ClaimAgent(ctx, agentID, sess.UUID, "voice")
-			if err == nil && claimed {
-				assignedAgent = agentID
-				break
-			}
-		}
-
-		if assignedAgent != "" {
+		// Score and get top-3
+		// TODO: load queue skills/group from config; using empty for now
+		candidates = scorer.ScoreAgents(ctx, available, nil, "", maxRetries)
+		if len(candidates) > 0 {
 			break
 		}
 	}
 
-	if assignedAgent == "" {
-		logger.Warn("No agent available, hanging up", "uuid", sess.UUID, "queue", selectedQueue)
+	// Timeline: agent scoring result
+	if len(candidates) > 0 {
+		pubTimeline("agent_scoring", map[string]interface{}{
+			"candidateCount": len(candidates),
+			"topAgent":       candidates[0].AgentID,
+			"topScore":       candidates[0].Score,
+		})
+	}
+
+	if len(candidates) == 0 {
+		logger.Warn("No agent available after polling", "uuid", sess.UUID, "queue", selectedQueue)
 		conn.Playback("ivr/ivr-call_back_later.wav")
 		conn.Hangup("NO_USER_RESPONSE")
 		return
 	}
 
-	// Phase 3: Ring agent
-	sess.AssignedAgent = assignedAgent
-	sess.State = "ringing"
+	// ── Phase 3: Try top-N candidates (re-route on no-answer) ──
+	var assignedAgent string
+	var ringStart time.Time
+	waitTimeMs := time.Since(sess.StartedAt).Milliseconds()
 
-	logger.Info("Bridging call to agent", "uuid", sess.UUID, "agent", assignedAgent)
+	for _, candidate := range candidates {
+		agentID := candidate.AgentID
 
-	// Bridge to agent's SIP extension
-	bridgeDest := fmt.Sprintf("sofia/internal/%s@%s", assignedAgent, cfg.SIPDomain)
-	conn.SetVariable("call_timeout", "20")
-	resp, err := conn.Bridge(bridgeDest)
-	if err != nil {
-		logger.Error("Bridge failed", "uuid", sess.UUID, "err", err)
-		agentState.ReleaseAgent(ctx, assignedAgent, "ready", "voice")
-		conn.Hangup("NORMAL_TEMPORARY_FAILURE")
+		claimed, err := agentState.ClaimAgent(ctx, agentID, sess.UUID, "voice")
+		if err != nil || !claimed {
+			logger.Info("Claim failed, trying next", "uuid", sess.UUID, "agent", agentID)
+			continue
+		}
+
+		sess.AssignedAgent = agentID
+		sess.State = "ringing"
+		pub("agent.status_changed", map[string]interface{}{
+			"agentId": agentID, "oldStatus": "ready", "newStatus": "ringing",
+			"channel": "voice", "interactionId": sess.UUID,
+		})
+
+		// ── Publish call.routing BEFORE bridge (100ms head start) ──
+		pub("call.routing", map[string]interface{}{
+			"callId":       sess.UUID,
+			"agentId":      agentID,
+			"callerNumber": sess.CallerNumber,
+			"callerName":   sess.CallerName,
+			"queue":        selectedQueue,
+			"ivrSelection": sess.IVRSelection,
+			"waitTimeMs":   waitTimeMs,
+			"score":        candidate.Score,
+		})
+		time.Sleep(100 * time.Millisecond) // let event reach frontend before INVITE
+
+		// Timeline: routing to agent
+		pubTimeline("routing", map[string]interface{}{
+			"agentId": agentID, "score": candidate.Score,
+		})
+
+		logger.Info("Bridging to agent", "uuid", sess.UUID, "agent", agentID, "score", candidate.Score)
+
+		// Timeline: ringing
+		ringStart = time.Now()
+		pubTimeline("ringing", map[string]interface{}{"agentId": agentID})
+
+		// Bridge to agent — wait for CHANNEL_BRIDGE event (agent answered)
+		bridgeDest := fmt.Sprintf("sofia/gateway/kamailio_proxy/%s", agentID)
+		conn.SetVariable("call_timeout", "25")
+		_, err = conn.Bridge(bridgeDest)
+
+		if err != nil {
+			logger.Warn("Bridge command failed", "uuid", sess.UUID, "agent", agentID, "err", err)
+			agentState.ReleaseAgent(ctx, agentID, "ready", "voice")
+			sess.AssignedAgent = ""
+			sess.State = "queued"
+			continue
+		}
+
+		// Wait for CHANNEL_BRIDGE (agent answered) or CHANNEL_HANGUP (bridge failed)
+		bridgeOK := false
+		bridgeTimer := time.NewTimer(30 * time.Second)
+	bridgeWait:
+		for {
+			select {
+			case <-bridgeTimer.C:
+				logger.Warn("Bridge timeout", "uuid", sess.UUID, "agent", agentID)
+				break bridgeWait
+			case <-ctx.Done():
+				break bridgeWait
+			case evt := <-conn.Events():
+				logger.Info("ESL event during bridge", "uuid", sess.UUID, "event", evt.Name)
+				switch evt.Name {
+				case "CHANNEL_BRIDGE":
+					bridgeOK = true
+					// Capture agent bridge leg UUID for later cleanup
+					if otherUUID := evt.Headers["Other-Leg-Unique-ID"]; otherUUID != "" {
+						sess.AgentLegUUID = otherUUID
+						logger.Info("Captured agent bridge leg UUID", "uuid", sess.UUID, "agentLeg", otherUUID)
+					}
+					break bridgeWait
+				case "CHANNEL_HANGUP", "CHANNEL_HANGUP_COMPLETE":
+					break bridgeWait
+				case "CHANNEL_EXECUTE_COMPLETE":
+					// Bridge app finished — check if it succeeded or failed
+					app := evt.Headers["Application"]
+					if app == "bridge" {
+						resp := evt.Headers["Application-Response"]
+						if resp != "" && resp != "_undef_" {
+							// Bridge failed with reason
+							logger.Warn("Bridge app failed", "uuid", sess.UUID, "response", resp)
+						}
+						break bridgeWait
+					}
+				}
+			}
+		}
+		bridgeTimer.Stop()
+
+		if !bridgeOK {
+			logger.Warn("Bridge no answer", "uuid", sess.UUID, "agent", agentID)
+			agentState.ReleaseAgent(ctx, agentID, "ready", "voice")
+			pub("agent.status_changed", map[string]interface{}{
+				"agentId": agentID, "oldStatus": "ringing", "newStatus": "ready",
+				"channel": "voice", "reason": "no_answer",
+			})
+			pub("call.agent_missed", map[string]interface{}{
+				"callId": sess.UUID, "agentId": agentID, "reason": "no_answer",
+			})
+			// Timeline: agent missed
+			pubTimeline("agent_missed", map[string]interface{}{
+				"agentId": agentID, "reason": "no_answer",
+				"ringDurationMs": time.Since(ringStart).Milliseconds(),
+				"retryNext": true,
+			})
+			sess.AssignedAgent = ""
+			sess.State = "queued"
+			continue
+		}
+
+		callLog("BRIDGE_OK", "agent", agentID)
+		logger.Info("Agent answered (CHANNEL_BRIDGE)", "uuid", sess.UUID, "agent", agentID)
+		assignedAgent = agentID
+		break
+	}
+
+	if assignedAgent == "" {
+		logger.Warn("All candidates missed, hanging up", "uuid", sess.UUID, "queue", selectedQueue)
+		conn.Playback("ivr/ivr-call_back_later.wav")
+		conn.Hangup("NO_USER_RESPONSE")
 		return
 	}
 
-	// If bridge succeeded, call is connected
+	// ── Phase 4: Connected ───────────────────────────
 	now := time.Now()
 	sess.AnsweredAt = &now
 	sess.State = "connected"
+	agentState.TransitionToOnCall(ctx, assignedAgent)
+	pub("agent.status_changed", map[string]interface{}{
+		"agentId": assignedAgent, "oldStatus": "ringing", "newStatus": "on_call",
+		"channel": "voice", "interactionId": sess.UUID,
+	})
 
-	logger.Info("Call connected", "uuid", sess.UUID, "agent", assignedAgent, "response", resp)
+	pub("call.answered", map[string]interface{}{
+		"callId":       sess.UUID,
+		"agentId":      assignedAgent,
+		"callerNumber": sess.CallerNumber,
+		"waitTimeMs":   time.Since(sess.StartedAt).Milliseconds(),
+		"direction":    "inbound",
+	})
 
-	// Wait for call to end (connection closes when call ends)
-	<-ctx.Done()
+	// Timeline: answered
+	pubTimeline("answered", map[string]interface{}{
+		"agentId":        assignedAgent,
+		"waitTimeMs":     time.Since(sess.StartedAt).Milliseconds(),
+		"ringDurationMs": time.Since(ringStart).Milliseconds(),
+	})
 
-	// Release agent
-	agentState.ReleaseAgent(ctx, assignedAgent, "acw", "voice")
+	callLog("CONNECTED", "agent", assignedAgent)
+	logger.Info("Call connected", "uuid", sess.UUID, "agent", assignedAgent)
+
+	// Register hangup callback so CTI API can kill this call
+	sessions.RegisterHangup(sess.UUID, func() {
+		conn.Hangup("NORMAL_CLEARING")
+		// Also kill all legs associated with this call on all FS servers
+		for _, client := range eslClients {
+			client.UUIDKill(sess.UUID, "NORMAL_CLEARING")
+			if sess.AgentLegUUID != "" {
+				client.UUIDKill(sess.AgentLegUUID, "NORMAL_CLEARING")
+			}
+		}
+	})
+
+	// ── Phase 5: Wait for call to end via ESL events ──
+	// Listen for CHANNEL_UNBRIDGE (partner left) or CHANNEL_HANGUP_COMPLETE (call ended)
+	callEndTimer := time.NewTimer(4 * time.Hour) // max call duration
+	defer callEndTimer.Stop()
+callActive:
+	for {
+		select {
+		case <-callEndTimer.C:
+			logger.Warn("Call max duration reached, forcing hangup", "uuid", sess.UUID)
+			break callActive
+		case <-ctx.Done():
+			logger.Info("ESL connection closed", "uuid", sess.UUID)
+			break callActive
+		case evt := <-conn.Events():
+			switch evt.Name {
+			case "CHANNEL_UNBRIDGE":
+				logger.Info("Bridge partner left (CHANNEL_UNBRIDGE)", "uuid", sess.UUID)
+				break callActive
+			case "CHANNEL_HANGUP", "CHANNEL_HANGUP_COMPLETE":
+				logger.Info("Call hangup event", "uuid", sess.UUID, "event", evt.Name,
+					"cause", evt.Headers["Hangup-Cause"])
+				break callActive
+			}
+		}
+	}
+
+	// Force hangup caller leg (ESL outbound connection)
+	conn.Hangup("NORMAL_CLEARING")
+
+	// Also kill the agent bridge leg via ESL inbound — this ensures the agent's
+	// SIP session (via kamailio_proxy gateway) gets BYE immediately when customer hangs up.
+	// Without this, agent SIP session lingers ~15-17s until timeout.
+	if len(eslClients) > 0 {
+		for _, client := range eslClients {
+			// Kill caller leg by UUID
+			if _, err := client.UUIDKill(sess.UUID, "NORMAL_CLEARING"); err != nil {
+				logger.Debug("UUIDKill caller attempt", "uuid", sess.UUID, "err", err)
+			}
+			// Kill agent bridge leg by captured UUID (from CHANNEL_BRIDGE event)
+			if sess.AgentLegUUID != "" {
+				if _, err := client.UUIDKill(sess.AgentLegUUID, "NORMAL_CLEARING"); err != nil {
+					logger.Debug("UUIDKill agent leg attempt", "agentLeg", sess.AgentLegUUID, "err", err)
+				}
+			}
+		}
+	}
+
+	// Release agent → ACW → auto-ready after 5s
+	agentState.ReleaseAgent(context.Background(), assignedAgent, "acw", "voice")
+	pub("agent.status_changed", map[string]interface{}{
+		"agentId": assignedAgent, "oldStatus": "on_call", "newStatus": "acw",
+		"channel": "voice",
+	})
+	go func() {
+		time.Sleep(5 * time.Second)
+		agentState.SetStatus(context.Background(), assignedAgent, "ready")
+		pub("agent.status_changed", map[string]interface{}{
+			"agentId": assignedAgent, "oldStatus": "acw", "newStatus": "ready",
+			"channel": "voice",
+		})
+	}()
 }

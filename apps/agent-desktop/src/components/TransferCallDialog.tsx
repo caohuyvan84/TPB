@@ -12,6 +12,7 @@ interface TransferCallDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   customerName: string;
+  onTransferCall?: (destination: string, type: 'blind' | 'attended') => Promise<void>;
 }
 
 const availableAgents = [
@@ -21,7 +22,7 @@ const availableAgents = [
   { id: '4', name: 'Agent Nga', department: 'Technical Support', status: 'available', skills: ['Software', 'Integration'] }
 ];
 
-export function TransferCallDialog({ open, onOpenChange, customerName }: TransferCallDialogProps) {
+export function TransferCallDialog({ open, onOpenChange, customerName, onTransferCall }: TransferCallDialogProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAgent, setSelectedAgent] = useState('');
   const [transferNote, setTransferNote] = useState('');
@@ -33,13 +34,21 @@ export function TransferCallDialog({ open, onOpenChange, customerName }: Transfe
     agent.skills.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const handleTransfer = () => {
-    console.log('Transferring call:', {
-      to: selectedAgent,
-      type: transferType,
-      note: transferNote
-    });
-    // Reset form
+  const handleTransfer = async () => {
+    const agent = availableAgents.find(a => a.id === selectedAgent);
+    if (!agent) return;
+
+    const sipType = transferType === 'cold' ? 'blind' : 'attended';
+    if (onTransferCall) {
+      try {
+        await onTransferCall(agent.name, sipType);
+      } catch (err) {
+        console.error('Transfer failed:', err);
+      }
+    } else {
+      console.log('Transferring call:', { to: selectedAgent, type: transferType, note: transferNote });
+    }
+
     setSelectedAgent('');
     setTransferNote('');
     setSearchTerm('');

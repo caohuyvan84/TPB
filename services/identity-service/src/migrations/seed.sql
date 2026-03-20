@@ -49,10 +49,10 @@ INSERT INTO users (id, username, email, password_hash, full_name, agent_id, tena
    'Nguyễn Thanh Hà', 'AGT005', '00000000-0000-0000-0000-000000000000', true)
 ON CONFLICT (username) DO NOTHING;
 
--- Insert supervisor (password: Sup@123)
+-- Insert supervisor (password: Sup@1234)
 INSERT INTO users (id, username, email, password_hash, full_name, agent_id, tenant_id, is_active) VALUES
   ('00000000-0000-0000-0000-000000000008', 'sup001', 'sup001@tpbank.com',
-   '$2b$12$daS27cG0oFu9g8VZYAHSyOiHKTrirRmtoMgejo19HE/hq9lcc8uaq',
+   '$2b$12$T785C4RW3SXKgXUrdRoNjORYcQg0jaod0XS79yFmiQM7Z7up/xJJS',
    'Lê Văn Hùng', 'SUP001', '00000000-0000-0000-0000-000000000000', true)
 ON CONFLICT (username) DO NOTHING;
 

@@ -7,7 +7,7 @@ export interface WebRtcCredentials {
   wsUri: string;
   sipUri: string;
   domain: string;
-  iceServers: { urls: string }[];
+  iceServers: { urls: string; username?: string; credential?: string }[];
 }
 
 export interface WebRtcCallbacks {
@@ -16,6 +16,8 @@ export interface WebRtcCallbacks {
   onCallAnswered: (callId: string) => void;
   onCallEnded: (callId: string) => void;
   onCallFailed: (callId: string, reason: string) => void;
+  /** Called when SIP transport disconnects unexpectedly (for auto-reconnect) */
+  onTransportDisconnected?: () => void;
 }
 
 /**
@@ -51,6 +53,19 @@ export class WebRtcService {
 
   /** Register to SIP proxy via WebSocket. */
   async register(credentials: WebRtcCredentials, agentId: string): Promise<void> {
+    // If already registered with same server, just re-send REGISTER (refresh)
+    // Don't tear down the entire UA + WebSocket connection
+    if (this.ua && this.registerer && this._status === 'registered') {
+      try {
+        await this.registerer.register();
+        return; // refresh succeeded, no need to recreate
+      } catch {
+        // Refresh failed — fall through to full reconnect
+        console.warn('[WebRTC] REGISTER refresh failed, doing full reconnect');
+      }
+    }
+
+    // Full reconnect: tear down old UA if exists
     if (this.ua) {
       await this.unregister();
     }
@@ -70,7 +85,12 @@ export class WebRtcService {
         authorizationPassword: '', // Kamailio no-auth for internal profile
         sessionDescriptionHandlerFactoryOptions: {
           peerConnectionConfiguration: {
-            iceServers: credentials.iceServers.map(s => ({ urls: s.urls })),
+            iceServers: credentials.iceServers.map(s => {
+              const entry: RTCIceServer = { urls: s.urls };
+              if (s.username) entry.username = s.username;
+              if (s.credential) entry.credential = s.credential;
+              return entry;
+            }),
           },
         },
         delegate: {
@@ -90,9 +110,36 @@ export class WebRtcService {
         if (state === RegistererState.Registered) {
           this.setStatus('registered');
         } else if (state === RegistererState.Unregistered) {
-          this.setStatus('disconnected');
+          // Only set disconnected if we didn't just get an error
+          if (this._status !== 'error') {
+            this.setStatus('disconnected');
+          }
         }
       });
+
+      // Listen for transport disconnect — triggers auto-reconnect in useWebRTC
+      const transport = this.ua.transport as any;
+      if (transport && typeof transport.onDisconnect === 'function') {
+        // SIP.js 0.21 transport events
+        const origDisconnect = transport.onDisconnect;
+        transport.onDisconnect = (error?: Error) => {
+          console.warn('[WebRTC] Transport disconnected', error?.message);
+          this.setStatus('disconnected');
+          this.callbacks.onTransportDisconnected?.();
+          origDisconnect?.call(transport, error);
+        };
+      }
+
+      // Also listen for WebSocket close/error on the raw transport
+      if (transport?._ws) {
+        transport._ws.addEventListener('close', () => {
+          if (this._status === 'registered') {
+            console.warn('[WebRTC] WebSocket closed unexpectedly');
+            this.setStatus('disconnected');
+            this.callbacks.onTransportDisconnected?.();
+          }
+        });
+      }
 
       await this.registerer.register();
     } catch (err) {
@@ -100,6 +147,12 @@ export class WebRtcService {
       this.setStatus('error');
       throw err;
     }
+  }
+
+  /** Check if SIP registration is still valid. Returns true if registered. */
+  isStillRegistered(): boolean {
+    if (!this.registerer) return false;
+    return this.registerer.state === RegistererState.Registered;
   }
 
   /** Unregister and cleanup. */
@@ -220,8 +273,29 @@ export class WebRtcService {
   /* ── Private ─────────────────────────────────────── */
 
   private handleIncomingCall(invitation: Invitation): void {
-    this.currentSession = invitation;
+    // Check for GoACD outbound marker — custom SIP headers from originate
+    const request = invitation.request;
+    const direction = request.getHeader('X-Call-Direction');
+    const destination = request.getHeader('X-Destination');
 
+    if (direction === 'outbound') {
+      // GoACD-originated outbound call: auto-accept (agent initiated via CTI API)
+      this.currentSession = invitation;
+      this.setupSessionListeners(invitation, destination || 'outbound');
+      console.log('[WebRTC] Outbound INVITE from GoACD, auto-accepting. Dest:', destination);
+      invitation.accept({
+        sessionDescriptionHandlerOptions: {
+          constraints: { audio: true, video: false },
+        },
+      }).catch((err) => {
+        console.error('[WebRTC] Outbound auto-accept failed:', err);
+        this.callbacks.onCallFailed(invitation.id, String(err));
+      });
+      return;
+    }
+
+    // Normal inbound call — show Answer/Reject UI
+    this.currentSession = invitation;
     const callerNumber = invitation.remoteIdentity.uri.user || 'Unknown';
     const callerName = invitation.remoteIdentity.displayName || callerNumber;
 

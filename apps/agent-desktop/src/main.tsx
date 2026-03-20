@@ -14,7 +14,7 @@
         <AppRouter />
         <Toaster position="top-right" />
       </AuthProvider>
-      <ReactQueryDevtools initialIsOpen={false} />
+      <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
     </QueryClientProvider>
   );
   

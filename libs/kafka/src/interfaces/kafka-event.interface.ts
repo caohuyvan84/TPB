@@ -19,6 +19,7 @@ export const KafkaTopics = {
   AGENT_LOGOUT: 'agent.logout',
   AGENT_STATUS_CHANGED: 'agent.status_changed',
   AGENT_CREATED: 'agent.created',
+  AGENT_STATUS_CHANGED_GOACD: 'agent.status_changed', // From GoACD (claim/release/transition)
 
   // Interaction events
   INTERACTION_CREATED: 'interaction.created',
@@ -32,6 +33,17 @@ export const KafkaTopics = {
 
   // CDR events
   CDR_CREATED: 'cdr.created',
+
+  // Call routing/state events (GoACD → CTI Adapter → Frontend)
+  CALL_ROUTING: 'call.routing',
+  CALL_ANSWERED: 'call.answered',
+  CALL_TRANSFERRED: 'call.transferred',
+  CALL_ENDED: 'call.ended',
+  CALL_AGENT_MISSED: 'call.agent_missed',
+  CALL_OUTBOUND_INITIATED: 'call.outbound.initiated',
+  CALL_OUTBOUND_RINGING: 'call.outbound.ringing',
+  CALL_OUTBOUND_AGENT_ANSWER: 'call.outbound.agent_answer',
+  CALL_OUTBOUND_FAILED: 'call.outbound.failed',
 
   // Notification events
   NOTIFICATION_CREATED: 'notification.created',
