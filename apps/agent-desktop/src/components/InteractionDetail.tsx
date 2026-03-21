@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useAuth } from '@/contexts/AuthContext';
 import { Interaction } from './useInteractionStats';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -650,6 +651,9 @@ SĐT: 0987 654 321`,
 };
 
 export function InteractionDetail({ interaction, onTransferCall, onCreateTicket, callControl }: InteractionDetailProps & { callControl?: any }) {
+  const { user } = useAuth();
+  const currentAgentId = user?.agentId || 'AGT001';
+  const currentAgentName = user?.fullName || 'Agent';
   const [isOnHold, setIsOnHold] = useState(false);
   const isMuted = callControl?.isMuted ?? false;
   const [chatMessage, setChatMessage] = useState('');
@@ -705,139 +709,7 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket,
   // Selected query object for ticket creation
   const [selectedQueryObject, setSelectedQueryObject] = useState<any>(null);
 
-  // Mock callbot data for inbound calls with IVR and bot conversation
-  const getCallbotData = (interaction: any): {
-    ivrPath: string[];
-    callbotTranscript: Array<{
-      speaker: 'customer' | 'ivr' | 'bot';
-      message: string;
-      timestamp: string;
-    }>;
-    customerSummary: {
-      identified: boolean;
-      name?: string;
-      customerId?: string;
-      accountType?: string;
-      reason?: string;
-    };
-  } | null => {
-    // Only return data for inbound calls
-    if (interaction.type !== 'call' || interaction.direction === 'outbound') {
-      return null;
-    }
-
-    // Mock data for Phạm Thị E - active call
-    if (interaction.customerName === 'Phạm Thị E' || interaction.id === '7') {
-      return {
-        ivrPath: [
-          'Menu chính',
-          'Dịch vụ Tài chính',
-          'Khoản vay',
-          'Tra cứu khoản vay hiện tại',
-          'Chuyển agent'
-        ],
-        callbotTranscript: [
-          {
-            speaker: 'customer',
-            message: '📞 Gọi vào hotline 1900 1900',
-            timestamp: '10:14:55'
-          },
-          {
-            speaker: 'ivr',
-            message: 'Xin chào quý khách. Cảm ơn quý khách đã gọi đến Mcredit. Vui lòng bấm phím:\nPhím 1: Dịch vụ Tài chính\nPhím 2: Hỗ trợ Kỹ thuật\nPhím 3: Khiếu nại',
-            timestamp: '10:15:00'
-          },
-          {
-            speaker: 'customer',
-            message: '[Khách hàng bấm phím 1]',
-            timestamp: '10:15:05'
-          },
-          {
-            speaker: 'ivr',
-            message: 'Quý khách đã chọn Dịch vụ Tài chính. Vui lòng bấm:\nPhím 1: Khoản vay\nPhím 2: Thẻ tín dụng\nPhím 3: Tài khoản tiết kiệm',
-            timestamp: '10:15:06'
-          },
-          {
-            speaker: 'customer',
-            message: '[Khách hàng bấm phím 1]',
-            timestamp: '10:15:10'
-          },
-          {
-            speaker: 'bot',
-            message: 'Xin chào! Tôi là Bot hỗ trợ của Mcredit. Để phục vụ quý khách tốt hơn, xin vui lòng cho biết số CMND/CCCD hoặc mã hợp đồng.',
-            timestamp: '10:15:12'
-          },
-          {
-            speaker: 'customer',
-            message: 'Số CCCD của tôi là 079123456789',
-            timestamp: '10:15:20'
-          },
-          {
-            speaker: 'bot',
-            message: 'Cảm ơn chị. Hệ thống xác nhận: Chị Phạm Thị E - Mã khách hàng VIP: KH-VIP-789. Chị có hợp đồng vay MCL-2024-005678 đang hiệu lực. Chị cần hỗ trợ gì về khoản vay này ạ?',
-            timestamp: '10:15:35'
-          },
-          {
-            speaker: 'customer',
-            message: 'Tôi muốn tất toán khoản vay trước hạn. Tôi cần biết số tiền phải trả và các bước thủ tục.',
-            timestamp: '10:15:50'
-          },
-          {
-            speaker: 'bot',
-            message: 'Dạ, yêu cầu tất toán trước hạn cần được xử lý bởi nhân viên tư vấn. Tôi sẽ chuyển cuộc gọi của chị đến bộ phận Dịch vụ Khách hàng VIP. Xin chị vui lòng giữ máy.',
-            timestamp: '10:16:10'
-          }
-        ],
-        customerSummary: {
-          identified: true,
-          name: 'Phạm Thị E',
-          customerId: 'KH-VIP-789',
-          accountType: 'VIP',
-          reason: 'Yêu cầu tất toán khoản vay trước hạn - Hợp đồng MCL-2024-005678'
-        }
-      };
-    }
-
-    // Default mock data for other calls
-    return {
-      ivrPath: [
-        'Menu chính',
-        'Hỗ trợ Khách hàng',
-        'Chuyển agent'
-      ],
-      callbotTranscript: [
-        {
-          speaker: 'ivr',
-          message: 'Xin chào quý khách. Cảm ơn quý khách đã gọi đến tổng đài. Vui lòng bấm phím để được hỗ trợ.',
-          timestamp: '09:30:00'
-        },
-        {
-          speaker: 'customer',
-          message: '[Khách hàng bấm phím 0]',
-          timestamp: '09:30:05'
-        },
-        {
-          speaker: 'bot',
-          message: 'Xin chào! Tôi là Bot hỗ trợ. Quý khách cần hỗ trợ gì ạ?',
-          timestamp: '09:30:08'
-        },
-        {
-          speaker: 'customer',
-          message: 'Tôi cần nói chuyện với nhân viên.',
-          timestamp: '09:30:15'
-        },
-        {
-          speaker: 'bot',
-          message: 'Vâng, tôi sẽ chuyển cuộc gọi đến nhân viên hỗ trợ. Xin vui lòng giữ máy.',
-          timestamp: '09:30:20'
-        }
-      ],
-      customerSummary: {
-        identified: false,
-        reason: 'Yêu cầu chuyển agent'
-      }
-    };
-  };
+  // Callbot/IVR data removed — real call timeline data now shown via CallTimeline component
 
   // Mock chat data with Bot→Agent timeline
   const getChatData = (interaction: any): {
@@ -1570,23 +1442,22 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket,
             />
           ) : null}
 
-          <CallTimeline 
+          <CallTimeline
+            interactionId={interaction.id}
+            callId={(interaction as any).metadata?.callId}
             totalDuration={interaction.duration || undefined}
           />
 
           <CallNotes
             callId={interaction.id}
             isCallActive={false}
-            currentAgentId="AGT001"
-            currentAgentName="Agent Tung"
+            currentAgentId={currentAgentId}
+            currentAgentName={currentAgentName}
           />
         </div>
       );
     }
 
-    // Active call controls (original functionality)
-    const callbotData = getCallbotData(interaction);
-    
     return (
       <div className="space-y-4">
         {/* Real-time call controls — only when there's a LIVE SIP call */}
@@ -1638,116 +1509,19 @@ export function InteractionDetail({ interaction, onTransferCall, onCreateTicket,
         </div>
         )}
 
-        {/* Callbot Context Information */}
-        {callbotData && (
-          <div className="space-y-3">
-            {/* Customer Summary */}
-            {callbotData.customerSummary.identified && (
-              <Card className="border-[#155DFC]/30 bg-blue-50/50">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center text-[#155DFC]">
-                    <UserCircle className="h-4 w-4 mr-2" />
-                    Thông tin khách hàng đã xác thực
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Tên khách hàng:</span>
-                    <span className="font-medium">{callbotData.customerSummary.name}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Mã khách hàng:</span>
-                    <span className="font-medium flex items-center">
-                      {callbotData.customerSummary.customerId}
-                      {callbotData.customerSummary.accountType === 'VIP' && (
-                        <Crown className="h-4 w-4 ml-1 text-yellow-600" />
-                      )}
-                    </span>
-                  </div>
-                  {callbotData.customerSummary.accountType && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Loại tài khoản:</span>
-                      <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
-                        {callbotData.customerSummary.accountType}
-                      </Badge>
-                    </div>
-                  )}
-                  <Separator className="my-2" />
-                  <div className="space-y-1">
-                    <span className="text-muted-foreground font-medium">Mục đích cuộc gọi:</span>
-                    <p className="text-foreground bg-background p-2 rounded border">{callbotData.customerSummary.reason}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* IVR Path */}
-            <Card className="border-purple-200 bg-purple-50/30">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center text-purple-700">
-                  <PhoneForwarded className="h-4 w-4 mr-2" />
-                  Nhánh tổng đài (IVR Path)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center flex-wrap gap-2">
-                  {callbotData.ivrPath.map((step, index) => (
-                    <div key={index} className="flex items-center">
-                      <Badge variant="outline" className="bg-background text-purple-700 border-purple-300">
-                        {step}
-                      </Badge>
-                      {index < callbotData.ivrPath.length - 1 && (
-                        <ChevronDown className="h-4 w-4 mx-1 text-purple-400 rotate-[-90deg]" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Callbot Transcript */}
-            <Card className="border-green-200 bg-green-50/30">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center text-green-700">
-                  <Headphones className="h-4 w-4 mr-2" />
-                  Hội thoại với Callbot/IVR trước đó
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {callbotData.callbotTranscript.map((item, index) => (
-                    <div
-                      key={index}
-                      className={`p-3 rounded-lg ${
-                        item.speaker === 'customer'
-                          ? 'bg-blue-100 mr-8'
-                          : item.speaker === 'bot'
-                          ? 'bg-green-100 ml-8'
-                          : 'bg-muted ml-8'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-muted-foreground">
-                          {item.speaker === 'customer' ? '👤 Khách hàng' : 
-                           item.speaker === 'bot' ? '🤖 Callbot' : '📞 IVR'}
-                        </span>
-                        <span className="text-xs text-muted-foreground">{item.timestamp}</span>
-                      </div>
-                      <p className="text-sm text-foreground whitespace-pre-line">{item.message}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+        {/* Live Call Timeline — shows real IVR/queue/routing events in real-time */}
+        <CallTimeline
+          interactionId={interaction.id}
+          callId={(interaction as any).metadata?.callId}
+          isLive={true}
+        />
 
         {/* Live Call Notes */}
         <CallNotes
           callId={interaction.id}
           isCallActive={true}
-          currentAgentId="AGT001"
-          currentAgentName="Agent Tung"
+          currentAgentId={currentAgentId}
+          currentAgentName={currentAgentName}
         />
       </div>
     );

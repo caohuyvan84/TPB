@@ -24,21 +24,24 @@ type GRPCServer struct {
 	port       int
 	agents     *agent.StateManager
 	sessions   *call.SessionStore
-	eslClients []*esl.InboundClient
+	eslClients []esl.ESLClient
 	outbound   *call.OutboundCallManager
-	sipDomain  string
-	turnSecret string
-	turnTTL    int
-	logger     *slog.Logger
-	startedAt  time.Time
+	sipDomain     string
+	turnSecret    string
+	turnTTL       int
+	sipAuthSecret string
+	sipAuthTTL    int
+	logger        *slog.Logger
+	startedAt     time.Time
 }
 
-func NewGRPCServer(port int, agents *agent.StateManager, sessions *call.SessionStore, eslClients []*esl.InboundClient, outbound *call.OutboundCallManager, sipDomain, turnSecret string, turnTTL int, logger *slog.Logger) *GRPCServer {
+func NewGRPCServer(port int, agents *agent.StateManager, sessions *call.SessionStore, eslClients []esl.ESLClient, outbound *call.OutboundCallManager, sipDomain, turnSecret string, turnTTL int, sipAuthSecret string, sipAuthTTL int, logger *slog.Logger) *GRPCServer {
 	return &GRPCServer{
 		port: port, agents: agents, sessions: sessions,
 		eslClients: eslClients, outbound: outbound,
 		sipDomain: sipDomain,
 		turnSecret: turnSecret, turnTTL: turnTTL,
+		sipAuthSecret: sipAuthSecret, sipAuthTTL: sipAuthTTL,
 		logger: logger, startedAt: time.Now(),
 	}
 }
@@ -51,6 +54,7 @@ func (s *GRPCServer) Start() error {
 	mux.HandleFunc("/rpc/MakeCall", s.handleMakeCall)
 	mux.HandleFunc("/rpc/HangupCall", s.handleHangupCall)
 	mux.HandleFunc("/rpc/GetSIPCredentials", s.handleGetSIPCredentials)
+	mux.HandleFunc("/rpc/SipHeartbeat", s.handleSipHeartbeat)
 
 	addr := fmt.Sprintf(":%d", s.port)
 	s.logger.Info("gRPC/HTTP server listening", "addr", addr)
@@ -187,18 +191,53 @@ func (s *GRPCServer) generateTURNCredentials(agentID string) (username, credenti
 	return
 }
 
+// generateSIPAuthToken creates an ephemeral SIP credential for Kamailio auth_ephemeral.
+// Kamailio validates: username = "<expiry_unix>:<extension>", password = HMAC-SHA1(shared_secret, username).
+// No DB lookup required — pure CPU verification on Kamailio side.
+// Shared secret must match GOACD_SIP_AUTH_SECRET env var and Kamailio auth_ephemeral secret.
+func (s *GRPCServer) generateSIPAuthToken(agentID string) (authUser, authPassword string, expiresAt int64) {
+	expiresAt = time.Now().Unix() + int64(s.sipAuthTTL)
+	authUser = fmt.Sprintf("%d:%s", expiresAt, agentID)
+	mac := hmac.New(sha1.New, []byte(s.sipAuthSecret))
+	mac.Write([]byte(authUser))
+	authPassword = base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	return
+}
+
 func (s *GRPCServer) handleGetSIPCredentials(w http.ResponseWriter, r *http.Request) {
 	agentID := r.URL.Query().Get("agentId")
 	turnUser, turnCred := s.generateTURNCredentials(agentID)
+	sipAuthUser, sipAuthPass, sipAuthExpires := s.generateSIPAuthToken(agentID)
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"wsUri":  fmt.Sprintf("wss://%s/wss-sip/", s.sipDomain),
-		"sipUri": fmt.Sprintf("sip:%s@%s", agentID, s.sipDomain),
-		"domain": s.sipDomain,
+		"wsUri":                 fmt.Sprintf("wss://%s/wss-sip/", s.sipDomain),
+		"sipUri":                fmt.Sprintf("sip:%s@%s", agentID, s.sipDomain),
+		"domain":                s.sipDomain,
+		"authorizationUser":     sipAuthUser,
+		"authorizationPassword": sipAuthPass,
+		"tokenExpiresAt":        sipAuthExpires,
 		"iceServers": []map[string]string{
 			{"urls": fmt.Sprintf("stun:%s:3478", s.sipDomain)},
 			{"urls": fmt.Sprintf("turn:%s:3478", s.sipDomain), "username": turnUser, "credential": turnCred},
 			{"urls": fmt.Sprintf("turns:%s:5349", s.sipDomain), "username": turnUser, "credential": turnCred},
 		},
 	})
+}
+
+func (s *GRPCServer) handleSipHeartbeat(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		AgentID       string `json:"agentId"`
+		SipRegistered bool   `json:"sipRegistered"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+	if req.AgentID == "" {
+		http.Error(w, "agentId required", 400)
+		return
+	}
+	err := s.agents.UpdateSipHeartbeat(r.Context(), req.AgentID, req.SipRegistered)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }

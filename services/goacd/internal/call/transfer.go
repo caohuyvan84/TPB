@@ -20,7 +20,7 @@ const (
 
 // TransferManager handles blind and attended transfers with agent state management.
 type TransferManager struct {
-	eslClients []*esl.InboundClient
+	eslClients []esl.ESLClient
 	agentState *agent.StateManager
 	publisher  *event.Publisher
 	sipDomain  string
@@ -29,7 +29,7 @@ type TransferManager struct {
 }
 
 func NewTransferManager(
-	eslClients []*esl.InboundClient,
+	eslClients []esl.ESLClient,
 	agentState *agent.StateManager,
 	publisher *event.Publisher,
 	sipDomain string,
@@ -46,7 +46,7 @@ func NewTransferManager(
 	}
 }
 
-func (m *TransferManager) esl() *esl.InboundClient {
+func (m *TransferManager) esl() esl.ESLClient {
 	if len(m.eslClients) == 0 {
 		return nil
 	}
@@ -103,7 +103,7 @@ func (m *TransferManager) BlindTransfer(
 // monitorBlindTransfer checks if target answers within 20s; if not, reconnects original agent.
 func (m *TransferManager) monitorBlindTransfer(
 	ctx context.Context,
-	client *esl.InboundClient,
+	client esl.ESLClient,
 	callUUID, targetAgentID, originalAgentID string,
 ) {
 	timer := time.NewTimer(20 * time.Second)

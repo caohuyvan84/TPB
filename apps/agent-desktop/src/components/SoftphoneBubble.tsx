@@ -26,6 +26,7 @@ const FAIL_REASON_MAP: Record<string, string> = {
   no_answer: 'Không nghe máy',
   wrong_number: 'Số không tồn tại',
   rejected: 'Từ chối cuộc gọi',
+  unavailable: 'Người dùng không khả dụng',
   cancelled: 'Đã huỷ',
   network_error: 'Lỗi mạng',
   timeout: 'Hết thời gian chờ',
@@ -137,9 +138,17 @@ export function SoftphoneBubble() {
     onOutboundFailed: (event) => {
       const reason = event.reason || 'error';
       const label = FAIL_REASON_MAP[reason] || reason;
+      const sipCode = event.sipCode ? ` (${event.sipCode})` : '';
+      const hangupCause = event.hangupCause || '';
+      const detail = `${label}${sipCode}`;
       setOutboundState('failed');
-      setFailReason(label);
-      if (label) toast.error(`Cuộc gọi thất bại: ${label}`);
+      setFailReason(detail);
+      if (detail) toast.error(`Cuộc gọi thất bại: ${detail}`, {
+        description: hangupCause ? `Nguyên nhân: ${hangupCause}` : undefined,
+        duration: 5000,
+      });
+      // Force cleanup SIP session (agent leg may still be connected)
+      try { callControl.hangup(); } catch { /* already gone */ }
       setTimeout(() => {
         setOutboundState(null);
         setFailReason(null);

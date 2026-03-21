@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -6,11 +7,12 @@ import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Separator } from './ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { 
-  Plus, 
-  Clock, 
-  Copy, 
-  Pin, 
+import { apiClient } from '@/lib/api-client';
+import {
+  Plus,
+  Clock,
+  Copy,
+  Pin,
   User,
   MessageCircle,
   FileText,
@@ -52,55 +54,63 @@ interface CallNotesProps {
   currentAgentName?: string;
 }
 
-// Mock initial notes for demo
-const mockInitialNotes: CallNote[] = [
-  {
-    id: 'note-1',
-    content: 'Khách hàng gọi để tư vấn về gói nâng cấp dịch vụ. Hiện tại đang sử dụng gói Basic, muốn chuyển lên Premium. Đã giải thích chi tiết về các tính năng mới bao gồm băng thông cao hơn từ 100Mbps lên 500Mbps, hỗ trợ kỹ thuật 24/7 thay vì chỉ giờ hành chính.',
-    timestamp: new Date(Date.now() - 8 * 60 * 1000), // 8 minutes ago
-    agentId: 'AGT001',
-    agentName: 'Agent Duc',
-    agentAvatar: '👨‍💼',
-    tag: 'customer-info'
-  },
-  {
-    id: 'note-2',
-    content: 'Đã giải thích chi tiết về lợi ích của gói Premium: băng thông cao hơn, hỗ trợ 24/7, và thêm 5GB lưu trữ cloud.',
-    timestamp: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
-    agentId: 'AGT001',
-    agentName: 'Agent Duc',
-    agentAvatar: '👨‍💼',
-    tag: 'general'
-  },
-  {
-    id: 'note-3',
-    content: 'Khách hàng quan tâm đến giá cả. Đã báo giá 299k/tháng cho gói Premium, khách hàng đề nghị 250k/tháng.',
-    timestamp: new Date(Date.now() - 3 * 60 * 1000), // 3 minutes ago
-    agentId: 'AGT001',
-    agentName: 'Agent Duc',
-    agentAvatar: '👨‍💼',
-    tag: 'payment',
-    isPinned: true
-  }
-];
-
-export function CallNotes({ 
-  callId, 
-  isCallActive, 
-  initialNotes = mockInitialNotes,
+export function CallNotes({
+  callId,
+  isCallActive,
+  initialNotes,
   onAddNote,
   currentAgentId = 'AGT001',
   currentAgentName = 'Agent Tung'
 }: CallNotesProps) {
-  const [notes, setNotes] = useState<CallNote[]>(initialNotes);
+  const queryClient = useQueryClient();
+
+  // Fetch real notes from API
+  const { data: apiNotes } = useQuery<any[]>({
+    queryKey: ['interaction-notes', callId],
+    queryFn: async () => {
+      const resp = await apiClient.get(`/api/v1/interactions/${callId}/notes`);
+      return resp.data;
+    },
+    enabled: !!callId,
+    staleTime: 10000,
+  });
+
+  // Map API notes to CallNote format
+  const realNotes: CallNote[] = (apiNotes || []).map((n: any) => ({
+    id: n.id,
+    content: n.content || n.text || '',
+    timestamp: new Date(n.createdAt || n.timestamp || Date.now()),
+    agentId: n.agentId || n.createdBy || '',
+    agentName: n.agentName || n.createdByName || n.agentId || 'Agent',
+    agentAvatar: '👨‍💼',
+    tag: n.tag || n.category || undefined,
+    isPinned: n.isPinned || false,
+  }));
+
+  // Use initialNotes if provided (legacy), else real API data
+  const baseNotes = initialNotes || realNotes;
+  const [localNotes, setLocalNotes] = useState<CallNote[]>([]);
+  const notes = [...localNotes, ...baseNotes];
   const [newNoteContent, setNewNoteContent] = useState('');
   const [selectedTag, setSelectedTag] = useState<string>('');
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [copiedNoteId, setCopiedNoteId] = useState<string | null>(null);
-  
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+
+  // Reset local notes when switching interactions
+  const prevCallIdRef = useRef(callId);
+  useEffect(() => {
+    if (callId !== prevCallIdRef.current) {
+      setLocalNotes([]);
+      setIsAddingNote(false);
+      setNewNoteContent('');
+      setSelectedTag('');
+      prevCallIdRef.current = callId;
+    }
+  }, [callId]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -137,7 +147,18 @@ export function CallNotes({
     };
 
     // Add to local state
-    setNotes(prev => [newNote, ...prev]);
+    setLocalNotes(prev => [newNote, ...prev]);
+
+    // Save to API — on success, remove local note (API data will replace it)
+    apiClient.post(`/api/v1/interactions/${callId}/notes`, {
+      content: newNote.content,
+      agentId: newNote.agentId,
+      agentName: newNote.agentName,
+      tag: newNote.tag,
+    }).then(() => {
+      setLocalNotes(prev => prev.filter(n => n.id !== newNote.id));
+      queryClient.invalidateQueries({ queryKey: ['interaction-notes', callId] });
+    }).catch(() => { /* keep local note if API fails */ });
 
     // Call parent callback if provided
     if (onAddNote) {
@@ -162,7 +183,7 @@ export function CallNotes({
 
     // Remove "new" highlighting after 3 seconds
     setTimeout(() => {
-      setNotes(prev => prev.map(note => 
+      setLocalNotes(prev => prev.map(note =>
         note.id === newNote.id ? { ...note, isNew: false } : note
       ));
     }, 3000);
@@ -184,7 +205,7 @@ export function CallNotes({
   };
 
   const handlePinNote = (noteId: string) => {
-    setNotes(prev => prev.map(note =>
+    setLocalNotes(prev => prev.map(note =>
       note.id === noteId ? { ...note, isPinned: !note.isPinned } : note
     ));
   };

@@ -163,7 +163,25 @@ func (r *Reconciler) reconcile(ctx context.Context) {
 				continue
 			}
 
-			// Check 3: Stale claim — agent in "ringing" for > 60 seconds
+			// Check 2.5: Agent is ready AND in available set → OK, skip remaining checks
+			// (This agent is healthy)
+
+			// Check 3: SIP heartbeat stale — agent is "ready" but SIP not alive > 90s
+			// This catches: browser crashed, tab closed without logout, network died without frontend notify
+			if status == StateReady {
+				if !r.state.IsSipAlive(ctx, agentID, 90_000) {
+					hb := state["sip_heartbeat_at"]
+					if hb != "" { // only act if agent ever sent a heartbeat
+						r.logger.Warn("Reconciler: agent SIP heartbeat stale, removing from available",
+							"agent", agentID, "channel", ch, "lastHeartbeat", hb)
+						r.rdb.SRem(ctx, availablePrefix+ch, agentID)
+						r.state.SetStatus(ctx, agentID, StateNotReady)
+						continue
+					}
+				}
+			}
+
+			// Check 4: Stale claim — agent in "ringing" for > 60 seconds
 			if status == StateRinging {
 				changedAt := state["status_changed_at"]
 				if changedAt != "" {
@@ -183,6 +201,32 @@ func (r *Reconciler) reconcile(ctx context.Context) {
 					"agent", agentID)
 				r.rdb.SRem(ctx, availablePrefix+ch, agentID)
 			}
+		}
+	}
+
+	// REVERSE CHECK: Find agents with status=ready but NOT in available:voice set (desync fix).
+	// Catches: partial pipeline failure, race between ACW auto-ready + frontend status update.
+	var cursor uint64
+	for {
+		keys, nextCursor, err := r.rdb.Scan(ctx, cursor, hashPrefix+"*", 100).Result()
+		if err != nil {
+			break
+		}
+		for _, key := range keys {
+			agentID := key[len(hashPrefix):]
+			status, _ := r.rdb.HGet(ctx, key, "status").Result()
+			if status == StateReady {
+				inSet, _ := r.rdb.SIsMember(ctx, availablePrefix+"voice", agentID).Result()
+				if !inSet {
+					r.logger.Warn("Reconciler: agent ready but missing from available set, re-adding",
+						"agent", agentID)
+					r.rdb.SAdd(ctx, availablePrefix+"voice", agentID)
+				}
+			}
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			break
 		}
 	}
 }

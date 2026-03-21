@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { InteractionService } from './interaction.service';
+import { CallTimelineConsumerService } from './call-timeline-consumer.service';
 import {
   UpdateStatusDto,
   AssignAgentDto,
@@ -20,7 +21,10 @@ import {
 
 @Controller('interactions')
 export class InteractionController {
-  constructor(private interactionService: InteractionService) {}
+  constructor(
+    private interactionService: InteractionService,
+    private callTimeline: CallTimelineConsumerService,
+  ) {}
 
   @Get()
   async list(@Query() filters: ListInteractionsDto) {
@@ -73,6 +77,36 @@ export class InteractionController {
     return this.interactionService.getTimeline(id);
   }
 
+  @Get('call-timeline-by-call/:callId')
+  async getCallTimelineByCallId(@Param('callId') callId: string) {
+    const events = await this.callTimeline.getByCallId(callId);
+    return { callId, events, summary: this.computeSummary(events) };
+  }
+
+  @Get(':id/call-timeline')
+  async getCallTimeline(@Param('id') id: string) {
+    const events = await this.callTimeline.getByInteractionId(id);
+    return { interactionId: id, events, summary: this.computeSummary(events) };
+  }
+
+  private computeSummary(events: any[]) {
+    let totalDurationMs = 0, talkTimeMs = 0, ivrTimeMs = 0, waitTimeMs = 0;
+    let holdCount = 0, transferCount = 0, missedAgentCount = 0;
+    for (const evt of events) {
+      const d = evt.data || {};
+      if (evt.eventType === 'ended') {
+        totalDurationMs = (d['totalDurationMs'] as number) || 0;
+        talkTimeMs = (d['talkTimeMs'] as number) || 0;
+      }
+      if (evt.eventType === 'ivr_completed') ivrTimeMs = (d['durationMs'] as number) || 0;
+      if (evt.eventType === 'answered') waitTimeMs = (d['waitTimeMs'] as number) || 0;
+      if (evt.eventType === 'hold') holdCount++;
+      if (evt.eventType === 'transfer_initiated') transferCount++;
+      if (evt.eventType === 'agent_missed') missedAgentCount++;
+    }
+    return { totalDurationMs, talkTimeMs, ivrTimeMs, waitTimeMs, holdCount, transferCount, missedAgentCount };
+  }
+
   @Patch(':id/voice')
   async updateVoice(
     @Param('id') id: string,
@@ -89,12 +123,13 @@ export class InteractionController {
   @Post(':id/notes')
   async addNote(
     @Param('id') id: string,
-    @Body() dto: CreateNoteDto,
+    @Body() dto: CreateNoteDto & { agentId?: string; agentName?: string },
     @Req() req: Request,
   ) {
     const user = (req as any).user;
-    const agentId = user?.sub || user?.id || '00000000-0000-0000-0000-000000000001';
-    const agentName = user?.fullName || user?.username || 'System Administrator';
+    // Use JWT user info first, fall back to body fields from frontend
+    const agentId = user?.sub || user?.id || dto.agentId || 'unknown';
+    const agentName = user?.fullName || user?.username || dto.agentName || 'Agent';
     return this.interactionService.addNote(id, agentId, agentName, dto.content, dto.tag, dto.isPinned);
   }
 }

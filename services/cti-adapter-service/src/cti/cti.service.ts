@@ -80,6 +80,11 @@ export class CtiService {
     return adapter.getAgentState(agentId);
   }
 
+  async sipHeartbeat(tenantId: string, agentId: string, sipRegistered: boolean) {
+    const adapter = await this.getAdapter(tenantId);
+    return adapter.sipHeartbeat(agentId, sipRegistered);
+  }
+
   /* ── WebRTC credentials ──────────────────────────── */
 
   async getWebRTCCredentials(tenantId: string, agentId: string) {

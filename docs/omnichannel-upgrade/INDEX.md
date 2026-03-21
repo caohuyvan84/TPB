@@ -12,6 +12,9 @@
 > **[VOICE-IMPLEMENTATION-PLAN.md](./VOICE-IMPLEMENTATION-PLAN.md)** — Kế hoạch triển khai Voice Channel (14 tuần, 9 sprint)
 > Ưu tiên #1: Hoàn thiện kênh voice end-to-end (hạ tầng + backend + GoACD + frontend WebRTC)
 
+> **[Email/EMAIL-CHANNEL-DESIGN.md](./Email/EMAIL-CHANNEL-DESIGN.md)** — Thiết kế chi tiết kênh Email (Gmail, threading, routing, UI)
+> **[Email/EMAIL-SPRINT-PLANNING.md](./Email/EMAIL-SPRINT-PLANNING.md)** — Sprint plan triển khai Email Channel MVP (6 tuần, Sprint 20)
+
 > **[19-voice-infra-status.md](./19-voice-infra-status.md)** — Hiện trạng hạ tầng Voice & Kế hoạch triển khai Softphone (2026-03-19)
 > Kết quả kiểm tra Kamailio/rtpengine/coturn/FreeSWITCH, phân tích SIP auth flow, task list triển khai softphone SIP.js
 
@@ -32,7 +35,9 @@
 | Routing / scoring / queues / SLA | [07-routing-engine.md](./07-routing-engine.md) |
 | Agent state (Redis structures, capacity) | [08-agent-state-management.md](./08-agent-state-management.md) |
 | Voice channel overview | [09-channel-designs/09-1-voice-channel.md](./09-channel-designs/09-1-voice-channel.md) |
-| Email channel | [09-channel-designs/09-2-email-channel.md](./09-channel-designs/09-2-email-channel.md) |
+| Email channel (original design) | [09-channel-designs/09-2-email-channel.md](./09-channel-designs/09-2-email-channel.md) |
+| **Email Channel Design (Gmail, threading, routing)** | [Email/EMAIL-CHANNEL-DESIGN.md](./Email/EMAIL-CHANNEL-DESIGN.md) |
+| **Email Sprint Planning (Sprint 20, 6 tuần)** | [Email/EMAIL-SPRINT-PLANNING.md](./Email/EMAIL-SPRINT-PLANNING.md) |
 | Social channels (Facebook, Zalo, WhatsApp) | [09-channel-designs/09-3-social-channels.md](./09-channel-designs/09-3-social-channels.md) |
 | SMS channel | [09-channel-designs/09-4-sms-channel.md](./09-channel-designs/09-4-sms-channel.md) |
 | Live Chat widget | [09-channel-designs/09-5-livechat-channel.md](./09-channel-designs/09-5-livechat-channel.md) |
@@ -50,6 +55,7 @@
 | **GoACD Gap Analysis (Design vs Code)** | [21-goacd-gap-analysis.md](./21-goacd-gap-analysis.md) |
 | **Outbound Call Design (routing, ringback, CDR)** | [22-outbound-call-design.md](./22-outbound-call-design.md) |
 | **Call Timeline Real Data (IVR, queue, scoring, events)** | [23-call-timeline-realdata.md](./23-call-timeline-realdata.md) |
+| **Kamailio SIP Agent Auth Deploy Guide** | [24-kamailio-sip-auth-deploy.md](./24-kamailio-sip-auth-deploy.md) |
 | Kamailio / SIP proxy config | [18-voice-platform/18-2a-kamailio-config.md](./18-voice-platform/18-2a-kamailio-config.md) |
 | rtpengine / media relay | [18-voice-platform/18-2b-rtpengine-config.md](./18-voice-platform/18-2b-rtpengine-config.md) |
 | FreeSWITCH / media server | [18-voice-platform/18-2c-freeswitch-config.md](./18-voice-platform/18-2c-freeswitch-config.md) |
@@ -148,6 +154,13 @@
 | 22 | [22-outbound-call-design.md](./22-outbound-call-design.md) | Outbound Call Design | Flow, ringback, SIP→status mapping, CDR fields, Kamailio route, FS gateway, interaction history |
 | 23 | [23-call-timeline-realdata.md](./23-call-timeline-realdata.md) | Call Timeline Real Data | Event schema (16 types), DB schema, API design, GoACD publish points, frontend mapping, sequence diagram |
 
+### Email Channel
+
+| File | Description | Key Content |
+|---|---|---|
+| [Email/EMAIL-CHANNEL-DESIGN.md](./Email/EMAIL-CHANNEL-DESIGN.md) | Email channel full design | Gmail OAuth2, Email Alias, threading [INT-XXX], GoACD routing, 3 tabs UI, reply with quoted thread, customer auto-match |
+| [Email/EMAIL-SPRINT-PLANNING.md](./Email/EMAIL-SPRINT-PLANNING.md) | Email sprint plan (Sprint 20, 6 tuần) | 5 phases: Gmail adapter, GoACD routing, threading, frontend, testing |
+
 ### Appendices
 
 | File | Description |
@@ -174,12 +187,13 @@
 7. **When modifying a feature**: read the feature file + its related files, never need to read all files
 8. **Voice platform changes**: start from [18-voice-platform/README.md](./18-voice-platform/README.md)
 
-**Task đang chờ triển khai (cập nhật 2026-03-19):**
-- **Sprint 10: DONE** — Softphone wired, SIP registration verified
-- **Sprint 11 Phase G1-G3: DONE** — Outbound via GoACD, 5-factor scoring, transfer state, 8 Kafka events
-- **Sprint 12: DONE** — Real-time state sync + SoftphoneBubble
-- **Sprint 13: DONE** — Outbound via GoACD, telco simulator, FS gateway, Kamailio PSTN route
-- **Sprint 15: NEXT** — GoACD Inbound Overhaul: ESL event-driven, bridge detection, call end, metadata, state machine. 17 tasks, 5 phases, ~17 ngày
+**Task đang chờ triển khai (cập nhật 2026-03-20):**
+- **Sprint 10-13: DONE** — Softphone, GoACD gap fix, real-time sync, outbound E2E
+- **Sprint 15: DONE** — GoACD Inbound Overhaul: ESL event-driven, bridge detection, state machine
+- **Sprint 16: DONE** — Connection resilience: auto-reconnect, network monitor, connection banner
+- **Sprint 17: DONE** — Background tab protection: silent audio keepalive + Web Push
+- **Sprint 18: DONE** — Call timeline real data: 16 event types, DB, API, frontend
+- **Sprint 20: NEXT** — Email Channel MVP: Gmail integration, GoACD email routing, threading, 3 tabs UI. 27 tasks, 5 phases, ~30 ngày. Xem [Email/EMAIL-SPRINT-PLANNING.md](./Email/EMAIL-SPRINT-PLANNING.md)
 
 ### For Developers
 - **Planning**: Start with [03-requirements.md](./03-requirements.md) → [15-implementation-plan.md](./15-implementation-plan.md)

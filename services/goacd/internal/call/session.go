@@ -1,6 +1,8 @@
 package call
 
 import (
+	"context"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -104,4 +106,52 @@ func (s *SessionStore) All() []*Session {
 		out = append(out, sess)
 	}
 	return out
+}
+
+// StartStaleSessionReaper periodically removes sessions that have been alive too long.
+// Prevents memory leaks from stuck calls that never properly cleaned up.
+// - Sessions in "ended" state older than 5 minutes → remove (cleanup missed)
+// - Sessions in any state older than 5 hours → force remove (stuck call)
+// - Sessions in "queued"/"ivr" older than 30 minutes → remove (abandoned before routing)
+func (s *SessionStore) StartStaleSessionReaper(ctx context.Context, logger *slog.Logger) {
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			now := time.Now()
+			var stale []string
+
+			s.mu.RLock()
+			for uuid, sess := range s.sessions {
+				age := now.Sub(sess.StartedAt)
+				switch {
+				case sess.State == "ended" && age > 5*time.Minute:
+					stale = append(stale, uuid)
+				case (sess.State == "queued" || sess.State == "ivr") && age > 30*time.Minute:
+					stale = append(stale, uuid)
+				case (sess.State == "ringing" || sess.State == "originating") && age > 3*time.Minute:
+					stale = append(stale, uuid) // ringing/originating should resolve in <90s
+				case sess.State == "connected" && age > 4*time.Hour:
+					stale = append(stale, uuid) // max call duration safety net
+				case age > 5*time.Hour:
+					stale = append(stale, uuid) // ultimate safety net for any state
+				}
+			}
+			s.mu.RUnlock()
+
+			if len(stale) > 0 {
+				s.mu.Lock()
+				for _, uuid := range stale {
+					delete(s.sessions, uuid)
+					delete(s.hangups, uuid)
+				}
+				s.mu.Unlock()
+				logger.Warn("Stale sessions reaped", "count", len(stale), "remaining", s.Count())
+			}
+		}
+	}
 }

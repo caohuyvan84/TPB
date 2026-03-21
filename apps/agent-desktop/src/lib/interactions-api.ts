@@ -69,6 +69,11 @@ function mapInteraction(raw: any): Interaction {
     ...raw,
     isVIP: raw.isVIP ?? raw.isVip ?? false,
     type: channelToType[raw.channel] || raw.type || 'call',
+    // Map API timestamp fields → frontend fields
+    timestamp: raw.timestamp || raw.createdAt || raw.created_at || undefined,
+    time: raw.time || raw.createdAt || raw.created_at || undefined,
+    // Map agent fields
+    assignedAgent: raw.assignedAgent || raw.assignedAgentName || raw.assignedAgentId || raw.assigned_agent_name || raw.assigned_agent_id || null,
   };
 }
 

@@ -25,7 +25,7 @@ export class InteractionNote {
   @JoinColumn({ name: 'interaction_id' })
   interaction!: Interaction;
 
-  @Column({ name: 'agent_id', type: 'uuid' })
+  @Column({ name: 'agent_id', type: 'varchar', length: 255 })
   agentId!: string;
 
   @Column({ name: 'agent_name' })
@@ -40,9 +40,9 @@ export class InteractionNote {
   @Column({ name: 'is_pinned', default: false })
   isPinned!: boolean;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt!: Date;
 }

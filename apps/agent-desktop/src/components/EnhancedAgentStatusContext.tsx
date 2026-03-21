@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { io } from 'socket.io-client';
 import { useAgentStatus } from '../hooks/useAgents';
 import { agentsApi } from '../lib/api/agents';
+import { ctiApi } from '@/lib/cti-api';
 import { toast } from 'sonner';
 
 export type ChannelType = 'voice' | 'email' | 'chat';
@@ -182,15 +183,19 @@ export function EnhancedAgentStatusProvider({
 
       // Map GoACD status → UI status
       let uiStatus: AgentStatus = 'ready';
-      if (newStatus === 'ringing' || newStatus === 'originating' || newStatus === 'on_call') {
+      if (newStatus === 'ringing' || newStatus === 'originating' || newStatus === 'on_call' || newStatus === 'acw') {
         uiStatus = 'not-ready';
-      } else if (newStatus === 'acw') {
+      } else if (newStatus === 'offline' || newStatus === 'not_ready') {
         uiStatus = 'not-ready';
       } else if (newStatus === 'ready') {
         uiStatus = 'ready';
       }
 
-      if (channel === 'voice') setVoiceCallState(newStatus);
+      // Only show voice call state badge for active call states (not offline/not_ready/ready)
+      if (channel === 'voice') {
+        const callStates = ['ringing', 'originating', 'on_call', 'acw'];
+        setVoiceCallState(callStates.includes(newStatus) ? newStatus : 'ready');
+      }
 
       setChannelStatuses(prev => ({
         ...prev,
@@ -204,22 +209,38 @@ export function EnhancedAgentStatusProvider({
         },
       }));
 
-      // Auto-ready after ACW: wait 5s then set agent back to Ready via API → Redis SADD
+      // Frontend ACW auto-ready: wait 6s (slightly after GoACD 5s) then force UI to ready.
+      // GoACD server also has 5s ACW timer → publishes agent:status_changed {ready}.
+      // This is a SAFETY NET: if GoACD WS event is missed, frontend still recovers.
+      // Uses ctiApi.setAgentState (GoACD) instead of agentsApi (Agent Service NestJS).
       if (newStatus === 'acw') {
         setTimeout(() => {
-          agentsApi.updateChannelStatus(channel, 'ready').catch(() => {});
-          setChannelStatuses(prev => ({
-            ...prev,
-            [channel]: {
-              ...prev[channel],
-              status: 'ready' as AgentStatus,
-              reason: undefined,
-              lastChanged: new Date(),
-              duration: 0,
-              isTimerActive: true,
-            },
-          }));
-        }, 5000); // 5s ACW timeout
+          // Only reset if still in ACW (GoACD ready event may have already arrived)
+          setVoiceCallState(prev => {
+            if (prev === 'acw') {
+              // Force ready via GoACD API (updates Redis available set correctly)
+              ctiApi.setAgentState(agentId, 'ready').catch(() => {});
+              return 'ready';
+            }
+            return prev;
+          });
+          setChannelStatuses(prev => {
+            if (prev[channel]?.reason === ('break' as NotReadyReason)) {
+              return {
+                ...prev,
+                [channel]: {
+                  ...prev[channel],
+                  status: 'ready' as AgentStatus,
+                  reason: undefined,
+                  lastChanged: new Date(),
+                  duration: 0,
+                  isTimerActive: true,
+                },
+              };
+            }
+            return prev;
+          });
+        }, 6000); // 6s — 1s after GoACD server ACW timer (5s)
       }
     });
 

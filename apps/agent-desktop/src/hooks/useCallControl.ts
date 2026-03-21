@@ -39,9 +39,9 @@ export function useCallControl(agentId: string | undefined) {
     });
   }, [connHub]);
 
-  // Invalidate interaction list to show new/updated interactions immediately
+  // Invalidate all interaction queries (list + detail + timeline)
   const refreshInteractions = () => {
-    queryClient.invalidateQueries({ queryKey: interactionKeys.lists() });
+    queryClient.invalidateQueries({ queryKey: interactionKeys.all });
   };
 
   // Wire real-time events from CTI WebSocket (GoACD → Kafka → CTI Adapter → Socket.IO)
@@ -58,7 +58,10 @@ export function useCallControl(agentId: string | undefined) {
       console.log('[CallControl] ended:', event);
       // Force-terminate local SIP session immediately (SIP BYE only, no CTI API call to avoid loop)
       try { webrtc.hangupCall(); } catch { /* session may already be gone */ }
+      // Refresh all interaction data — status, timeline, list
       refreshInteractions();
+      // Delayed second refresh (wait for DB writes to complete)
+      setTimeout(refreshInteractions, 1500);
     },
     onCallAssigned: (event) => {
       console.log('[CallControl] assigned:', event);
@@ -76,7 +79,10 @@ export function useCallControl(agentId: string | undefined) {
       console.log('[CallControl] agent missed:', event);
     },
     onOutboundFailed: (event) => {
-      console.log('[CallControl] outbound failed:', event);
+      console.log('[CallControl] outbound failed:', event.reason, event.sipCode, event.hangupCause);
+      // Force-terminate SIP session (agent leg may still be alive after bridge failure)
+      try { webrtc.hangupCall(); } catch { /* session may already be gone */ }
+      refreshInteractions();
     },
   }, agentId);
 

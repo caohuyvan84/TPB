@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useCall } from './CallContext';
 import { useEnhancedAgentStatus } from './EnhancedAgentStatusContext';
 import { useNotifications } from './NotificationContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { AgentStatusWidget } from './AgentStatusWidget';
 import { AgentSettingsSidebar } from './AgentSettingsSidebar';
 import { NotificationCenter } from './NotificationCenter';
@@ -56,7 +57,8 @@ export function EnhancedAgentHeader({
 }: EnhancedAgentHeaderProps) {
   const [agentStatus, setAgentStatus] = useState<'available' | 'busy' | 'away' | 'offline'>('available');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  
+  const { logout } = useAuth();
+
   // Call context
   const { currentCall, isCallWidgetVisible, showCallWidget, endCall } = useCall();
   
@@ -490,7 +492,13 @@ export function EnhancedAgentHeader({
             
             <DropdownMenuSeparator />
             
-            <DropdownMenuItem className="flex items-center space-x-2 text-red-600">
+            <DropdownMenuItem
+              className="flex items-center space-x-2 text-red-600"
+              onClick={() => {
+                logout();
+                window.location.href = '/login';
+              }}
+            >
               <LogOut className="h-4 w-4" />
               <span>Đăng xuất</span>
             </DropdownMenuItem>

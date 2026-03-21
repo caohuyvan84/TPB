@@ -2053,31 +2053,34 @@ Browser hiện đại throttle background tab rất mạnh:
 
 #### Sprint 18 Done ✓
 
-**Phase L1 (GoACD Timeline Events):**
-- [ ] Helper `pubTimeline()` + Kafka topic `call.timeline`
-- [ ] Inbound: 9 timeline events tại mỗi mốc call lifecycle
-- [ ] IVR digit callback → `ivr_digit` event
-- [ ] Outbound: 4 timeline events
-- [ ] Agent missed event enrichment
-- [ ] Ended event: hangupBy, talkTimeMs, totalDurationMs
+**Phase L1 (GoACD Timeline Events):** ✅ DONE
+- [x] Helper `pubTimeline()` + Kafka topic `call.timeline`
+- [x] Inbound: 9 timeline events (call_started, ivr_started, ivr_digit, ivr_completed, queued, agent_scoring, routing, ringing, answered) + ended in defer
+- [x] IVR digit callback `OnDigit` → `ivr_digit` event
+- [x] Outbound: 4 timeline events (call_started, ringing, answered, ended)
+- [x] Agent missed event enrichment (ringDurationMs, retryNext)
+- [x] Ended event: hangupBy, talkTimeMs, totalDurationMs
 
-**Phase L2 (Interaction Service):**
-- [ ] DB table `call_timeline_events` + entity + migration
-- [ ] Kafka consumer `call.timeline` → save + WS forward
-- [ ] Link orphan events khi interaction được tạo
-- [ ] API `GET /interactions/:id/call-timeline` + summary
+**Phase L2 (Interaction Service):** ✅ DONE
+- [x] DB table `call_timeline_events` (PostgreSQL, JSONB) + entity `CallTimelineEvent`
+- [x] Kafka consumer `call.timeline` → save to DB + lookup interactionId
+- [x] Link orphan events khi interaction được tạo (in handleCallRouting)
+- [x] API `GET /interactions/:id/call-timeline` + summary (totalDuration, talkTime, holdCount, etc.)
 
-**Phase L3 (Frontend):**
-- [ ] useCallTimeline hook (fetch + WS realtime)
-- [ ] CallTimeline props refactor (xóa mock data)
-- [ ] Event type → UI mapping (16 types, Vietnamese labels)
-- [ ] Agent action events (hold/mute → timeline)
+**Phase L3 (Frontend):** ✅ DONE
+- [x] `useCallTimeline` hook (React Query fetch + WS realtime invalidation)
+- [x] CallTimeline props refactor: `interactionId` + `isLive` props, fallback to mock for old interactions
+- [x] Event type → UI mapping: 16 eventTypes, Vietnamese labels, icons, status colors
+- [x] Summary stats: 4 columns (tổng thời gian, nói chuyện, lần hold, chuyển tiếp)
+- [x] Live badge "ĐANG GỌI" for active calls
+- [x] Empty state + loading state
+- [ ] Agent action events (hold/mute → timeline) — deferred, needs CTI API endpoint
 
-**Phase L4 (Edge Cases):**
-- [ ] Outbound timeline display
-- [ ] Empty state cho old interactions
-- [ ] Live badge + auto-scroll cho active calls
-- [ ] Kong route
+**Phase L4 (Edge Cases):** ✅ DONE
+- [x] Outbound timeline (call_started outbound, ringing, answered, ended)
+- [x] Empty state cho old interactions ("Không có dữ liệu chi tiết cuộc gọi")
+- [x] Live badge for active calls
+- [ ] Kong route — sử dụng route hiện có `/api/v1/interactions/` đã proxy qua Kong
 
 **Tổng effort Sprint 18: ~8 ngày (1.5 tuần)**
 

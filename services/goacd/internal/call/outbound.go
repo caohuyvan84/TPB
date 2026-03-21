@@ -18,7 +18,7 @@ import (
 // Uses single originate + inline bridge: agent → &bridge(customer)
 // Agent hears real ringback tone from telco via early media.
 type OutboundCallManager struct {
-	eslClients  []*esl.InboundClient
+	eslClients  []esl.ESLClient
 	agentState  *agent.StateManager
 	sessions    *SessionStore
 	publisher   *event.Publisher
@@ -29,7 +29,7 @@ type OutboundCallManager struct {
 }
 
 func NewOutboundCallManager(
-	eslClients []*esl.InboundClient,
+	eslClients []esl.ESLClient,
 	agentState *agent.StateManager,
 	sessions *SessionStore,
 	publisher *event.Publisher,
@@ -97,8 +97,10 @@ func (m *OutboundCallManager) MakeCall(ctx context.Context, agentID, destination
 	// Agent receives SIP INVITE → auto-accept → FS bridges to customer → early media (ringback)
 	custDial := m.buildCustDial(destination, agentID)
 	// Route agent leg via kamailio_proxy gateway (→ Kamailio :5060 → usrloc → SIP.js)
+	// hangup_after_bridge=true: auto-hangup agent leg when bridge (customer) ends/fails
+	// fail_on_single_reject=true: immediately fail if customer leg returns 4xx/5xx/6xx
 	dialStr := fmt.Sprintf(
-		"{origination_uuid=%s,origination_caller_id_number=%s,sip_h_X-Call-Direction=outbound,sip_h_X-GoACD-CallId=%s,sip_h_X-Destination=%s,ignore_early_media=false,call_timeout=60}sofia/gateway/kamailio_proxy/%s",
+		"{origination_uuid=%s,origination_caller_id_number=%s,sip_h_X-Call-Direction=outbound,sip_h_X-GoACD-CallId=%s,sip_h_X-Destination=%s,ignore_early_media=false,call_timeout=60,hangup_after_bridge=true,fail_on_single_reject=true}sofia/gateway/kamailio_proxy/%s",
 		agentLegUUID, agentID, callID, destination, agentID,
 	)
 	bridgeApp := fmt.Sprintf("bridge(%s)", custDial)
@@ -115,43 +117,74 @@ func (m *OutboundCallManager) MakeCall(ctx context.Context, agentID, destination
 	return sess, nil
 }
 
-// monitorCall polls the agent leg UUID to detect state transitions and call end.
-func (m *OutboundCallManager) monitorCall(ctx context.Context, c *esl.InboundClient, sess *Session, agentID string) {
-	ticker := time.NewTicker(1 * time.Second)
+// monitorCall monitors outbound call with adaptive polling:
+// - Setup phase (before answered): poll every 2s for ringing/answered/failure detection
+// - Active phase (after answered): poll every 5s just for call-end detection
+// hangup_after_bridge=true handles auto-cleanup: FS kills agent leg when bridge fails/ends.
+// This reduces ESL load by ~3-5× vs the old 1s polling.
+func (m *OutboundCallManager) monitorCall(ctx context.Context, c esl.ESLClient, sess *Session, agentID string) {
+	ticker := time.NewTicker(2 * time.Second) // setup phase: 2s
 	defer ticker.Stop()
 
 	ringingPublished := false
 	answeredPublished := false
-	timeout := time.After(90 * time.Second) // max call setup time
+	setupTimeout := time.After(90 * time.Second)
 
 	for {
 		select {
-		case <-timeout:
-			m.logger.Warn("Outbound: monitor timeout", "callId", sess.UUID)
-			c.UUIDKill(sess.AgentLegUUID, "RECOVERY_ON_TIMER_EXPIRE")
-			m.fail(ctx, sess, agentID, "timeout", "NO_ANSWER")
-			return
+		case <-setupTimeout:
+			if !answeredPublished {
+				m.logger.Warn("Outbound: monitor timeout", "callId", sess.UUID)
+				c.UUIDKill(sess.AgentLegUUID, "RECOVERY_ON_TIMER_EXPIRE")
+				m.fail(ctx, sess, agentID, "timeout", "NO_ANSWER")
+				return
+			}
 
 		case <-ctx.Done():
 			return
 
 		case <-ticker.C:
-			exists, _ := c.UUIDExists(sess.AgentLegUUID)
+			exists, eslErr := c.UUIDExists(sess.AgentLegUUID)
+			if eslErr != nil {
+				// ESL error — don't assume call ended, skip this poll cycle
+				m.logger.Warn("Outbound: UUIDExists error, skipping poll",
+					"callId", sess.UUID, "err", eslErr)
+				continue
+			}
 			if !exists {
-				// Call ended — read hangup cause from FS
-				m.handleCallEnd(ctx, c, sess, agentID)
+				// hangup_after_bridge killed agent leg, or call ended normally
+				m.handleCallEnd(ctx, c, sess, agentID, "")
 				return
 			}
 
-			// Debug: log FS channel vars every 5s
+			// During setup: detect bridge failure
 			if !answeredPublished {
-				bond, _ := c.UUIDGetVar(sess.AgentLegUUID, "signal_bond")
-				state, _ := c.UUIDGetVar(sess.AgentLegUUID, "channel_state")
-				m.logger.Debug("Outbound: monitor poll", "callId", sess.UUID,
-					"signal_bond", strings.TrimSpace(bond), "channel_state", strings.TrimSpace(state))
+				if bridgeCause, _ := c.UUIDGetVar(sess.AgentLegUUID, "last_bridge_hangup_cause"); bridgeCause != "" {
+					bridgeCause = strings.TrimSpace(bridgeCause)
+					if bridgeCause != "" &&
+						!strings.Contains(bridgeCause, "ERR") &&
+						bridgeCause != "NONE" &&
+						bridgeCause != "_undef_" &&
+						bridgeCause != "SUCCESS" {
+						sipCode := ""
+						if code, _ := c.UUIDGetVar(sess.AgentLegUUID, "last_bridge_proto_specific_hangup_cause"); code != "" {
+							code = strings.TrimSpace(code)
+							if strings.HasPrefix(code, "sip:") {
+								sipCode = strings.TrimPrefix(code, "sip:")
+							} else if !strings.Contains(code, "ERR") && code != "_undef_" {
+								sipCode = code
+							}
+						}
+						m.logger.Warn("Outbound: bridge failed",
+							"callId", sess.UUID, "cause", bridgeCause, "sipCode", sipCode)
+						c.UUIDKill(sess.AgentLegUUID, bridgeCause)
+						m.handleCallEnd(ctx, c, sess, agentID, bridgeCause+"|"+sipCode)
+						return
+					}
+				}
 			}
 
-			// Detect ringing (early media)
+			// Detect ringing
 			if !ringingPublished {
 				if progress, _ := c.UUIDGetVar(sess.AgentLegUUID, "progress_media_time"); progress != "" && !strings.Contains(progress, "0") {
 					ringingPublished = true
@@ -165,9 +198,8 @@ func (m *OutboundCallManager) monitorCall(ctx context.Context, c *esl.InboundCli
 				}
 			}
 
-			// Detect answered (bridge complete) — check if B-leg (customer) is bridged
+			// Detect answered (bridge complete)
 			if !answeredPublished {
-				// signal_bond = UUID of bridged partner. Empty = not bridged yet
 				if bond, _ := c.UUIDGetVar(sess.AgentLegUUID, "signal_bond"); bond != "" && !strings.Contains(bond, "ERR") && len(strings.TrimSpace(bond)) > 10 {
 					answeredPublished = true
 					now := time.Now()
@@ -186,6 +218,8 @@ func (m *OutboundCallManager) monitorCall(ctx context.Context, c *esl.InboundCli
 						"agentId": agentID, "destination": sess.DestNumber,
 						"waitTimeMs": time.Since(sess.StartedAt).Milliseconds(),
 					})
+					// Switch to sparse polling for active call
+					ticker.Reset(5 * time.Second)
 				}
 			}
 		}
@@ -193,25 +227,36 @@ func (m *OutboundCallManager) monitorCall(ctx context.Context, c *esl.InboundCli
 }
 
 // handleCallEnd reads FS channel variables and publishes CDR + events.
-func (m *OutboundCallManager) handleCallEnd(ctx context.Context, c *esl.InboundClient, sess *Session, agentID string) {
+// overrideCause: if non-empty, use this instead of reading from FS (UUID may be gone after kill).
+// Format: "HANGUP_CAUSE" or "HANGUP_CAUSE|SIP_CODE"
+func (m *OutboundCallManager) handleCallEnd(ctx context.Context, c esl.ESLClient, sess *Session, agentID string, overrideCause string) {
 	now := time.Now()
 	sess.EndedAt = &now
 	sess.State = "ended"
 
-	// Try to read hangup cause (may fail if UUID already gone)
 	hangupCause := "NORMAL_CLEARING"
 	sipCode := ""
-	// Use show channels for recently ended calls
-	if resp, err := c.API(fmt.Sprintf("uuid_getvar %s hangup_cause", sess.AgentLegUUID)); err == nil && resp != "" {
-		cause := strings.TrimSpace(resp)
-		if !strings.Contains(cause, "ERR") && cause != "" {
-			hangupCause = cause
+
+	if overrideCause != "" {
+		// Use pre-read cause (passed from bridge failure detection, before UUID was killed)
+		parts := strings.SplitN(overrideCause, "|", 2)
+		hangupCause = parts[0]
+		if len(parts) > 1 && parts[1] != "" {
+			sipCode = parts[1]
 		}
-	}
-	if resp, err := c.API(fmt.Sprintf("uuid_getvar %s sip_term_status", sess.AgentLegUUID)); err == nil && resp != "" {
-		code := strings.TrimSpace(resp)
-		if !strings.Contains(code, "ERR") {
-			sipCode = code
+	} else {
+		// Try to read hangup cause from FS (may fail if UUID already gone)
+		if resp, err := c.API(fmt.Sprintf("uuid_getvar %s hangup_cause", sess.AgentLegUUID)); err == nil && resp != "" {
+			cause := strings.TrimSpace(resp)
+			if !strings.Contains(cause, "ERR") && cause != "" {
+				hangupCause = cause
+			}
+		}
+		if resp, err := c.API(fmt.Sprintf("uuid_getvar %s sip_term_status", sess.AgentLegUUID)); err == nil && resp != "" {
+			code := strings.TrimSpace(resp)
+			if !strings.Contains(code, "ERR") {
+				sipCode = code
+			}
 		}
 	}
 
@@ -233,22 +278,31 @@ func (m *OutboundCallManager) handleCallEnd(ctx context.Context, c *esl.InboundC
 
 	if wasConnected {
 		// Normal call end → ACW → auto-ready after 5s
-		m.agentState.ReleaseAgent(ctx, agentID, "acw", "voice")
+		m.agentState.ReleaseAgentWithRetry(ctx, agentID, "acw", "voice")
 		m.pub(ctx, "agent.status_changed", map[string]interface{}{
 			"agentId": agentID, "oldStatus": "on_call", "newStatus": "acw", "channel": "voice",
 		}, agentID)
-		// Server-side auto-ready after ACW timeout
+		// Server-side auto-ready after ACW timeout (respects context for shutdown)
 		go func() {
-			time.Sleep(5 * time.Second)
-			m.agentState.SetStatus(ctx, agentID, "ready")
-			m.pub(ctx, "agent.status_changed", map[string]interface{}{
-				"agentId": agentID, "oldStatus": "acw", "newStatus": "ready", "channel": "voice",
-			}, agentID)
-			m.logger.Info("Auto-ready after ACW", "agent", agentID)
+			timer := time.NewTimer(5 * time.Second)
+			defer timer.Stop()
+			select {
+			case <-timer.C:
+				if err := m.agentState.SetStatus(context.Background(), agentID, "ready"); err != nil {
+					m.logger.Error("ACW auto-ready failed", "agent", agentID, "err", err)
+					return
+				}
+				m.pub(context.Background(), "agent.status_changed", map[string]interface{}{
+					"agentId": agentID, "oldStatus": "acw", "newStatus": "ready", "channel": "voice",
+				}, agentID)
+				m.logger.Info("Auto-ready after ACW", "agent", agentID)
+			case <-ctx.Done():
+				// Shutdown — skip
+			}
 		}()
 	} else {
 		// Call failed before connect (busy, no answer, etc)
-		m.agentState.ReleaseAgent(ctx, agentID, "ready", "voice")
+		m.agentState.ReleaseAgentWithRetry(ctx, agentID, "ready", "voice")
 		m.pub(ctx, "agent.status_changed", map[string]interface{}{
 			"agentId": agentID, "oldStatus": "originating", "newStatus": "ready", "channel": "voice",
 		}, agentID)
@@ -286,6 +340,8 @@ func mapHangupCause(cause string) string {
 		return "normal"
 	case "ORIGINATOR_CANCEL":
 		return "cancelled"
+	case "SUBSCRIBER_ABSENT", "TEMPORARILY_UNAVAILABLE":
+		return "unavailable"
 	case "NETWORK_OUT_OF_ORDER", "DESTINATION_OUT_OF_ORDER", "NORMAL_TEMPORARY_FAILURE":
 		return "network_error"
 	default:
@@ -306,7 +362,7 @@ func (m *OutboundCallManager) fail(ctx context.Context, sess *Session, agentID, 
 	now := time.Now()
 	sess.EndedAt = &now
 	sess.State = "ended"
-	m.agentState.ReleaseAgent(ctx, agentID, "ready", "voice")
+	m.agentState.ReleaseAgentWithRetry(ctx, agentID, "ready", "voice")
 	m.pub(ctx, "agent.status_changed", map[string]interface{}{
 		"agentId": agentID, "oldStatus": "originating", "newStatus": "ready", "channel": "voice",
 	}, agentID)

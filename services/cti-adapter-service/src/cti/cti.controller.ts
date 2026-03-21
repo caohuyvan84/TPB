@@ -64,6 +64,14 @@ export class CtiController {
     return this.ctiService.getAgentState(tenantId, agentId);
   }
 
+  @Post('cti/agent/sip-heartbeat')
+  async sipHeartbeat(
+    @Query('tenantId') tenantId: string,
+    @Body() body: { agentId: string; sipRegistered: boolean; timestamp: number },
+  ) {
+    return this.ctiService.sipHeartbeat(tenantId, body.agentId, body.sipRegistered);
+  }
+
   @Get('admin/cti/config')
   async getConfig(@Query('tenantId') tenantId: string) {
     return this.ctiService.getConfig(tenantId);

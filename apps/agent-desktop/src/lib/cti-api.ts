@@ -51,6 +51,21 @@ export const ctiApi = {
     return data;
   },
 
+  setAgentState: async (agentId: string, status: string): Promise<any> => {
+    const { data } = await apiClient.post(`/api/v1/cti/agent/state?${t}`, { agentId, status });
+    return data;
+  },
+
+  /** Send SIP heartbeat to GoACD — server uses this to detect dead agents */
+  updateSipHeartbeat: async (agentId: string, sipRegistered: boolean): Promise<any> => {
+    const { data } = await apiClient.post(`/api/v1/cti/agent/sip-heartbeat?${t}`, {
+      agentId,
+      sipRegistered,
+      timestamp: Date.now(),
+    });
+    return data;
+  },
+
   getConfig: async (): Promise<CtiConfig> => {
     const { data } = await apiClient.get('/api/v1/admin/cti/config');
     return data;

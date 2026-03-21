@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { KafkaConsumerService, KafkaTopics } from 'nest-kafka';
 import { InteractionService } from './interaction.service';
+import { CallTimelineConsumerService } from './call-timeline-consumer.service';
 import axios from 'axios';
 
 const CUSTOMER_SERVICE_URL = process.env.CUSTOMER_SERVICE_URL || 'http://localhost:3005';
@@ -21,6 +22,7 @@ export class CallEventConsumerService implements OnModuleInit {
   constructor(
     private kafkaConsumer: KafkaConsumerService,
     private interactionService: InteractionService,
+    private callTimeline: CallTimelineConsumerService,
   ) {}
 
   async onModuleInit() {
@@ -84,7 +86,7 @@ export class CallEventConsumerService implements OnModuleInit {
 
     // Create interaction EARLY (status=new, before agent answers)
     try {
-      await this.interactionService.createInteraction({
+      const newInteraction = await this.interactionService.createInteraction({
         type: 'call',
         channel: 'voice',
         customerId,
@@ -94,7 +96,25 @@ export class CallEventConsumerService implements OnModuleInit {
         priority: 'medium',
         metadata: { callerNumber, callId, queue, waitTimeMs, assignedAgentId: agentId },
       });
+
+      // Assign agent immediately (agentId from call.routing = agent being routed to)
+      if (agentId && newInteraction?.id) {
+        try {
+          await this.interactionService.assignAgent(newInteraction.id, agentId, agentId);
+        } catch { /* non-critical */ }
+      }
       this.logger.log(`Interaction created (routing) for ${callerNumber} → ${customerName}`);
+
+      // Link orphan timeline events (IVR events happened before interaction was created)
+      try {
+        const interactions = await this.interactionService.findByMetadataCallId(callId);
+        if (interactions.length > 0) {
+          const linked = await this.callTimeline.linkOrphanEvents(callId, interactions[0].id);
+          if (linked > 0) {
+            this.logger.log(`Linked ${linked} orphan timeline events for call ${callId}`);
+          }
+        }
+      } catch { /* non-critical */ }
     } catch (err) {
       this.logger.error(`Failed to create interaction (routing): ${err}`);
     }
@@ -106,13 +126,17 @@ export class CallEventConsumerService implements OnModuleInit {
 
     this.logger.log(`Inbound call answered: callId=${callId} agent=${agentId}`);
 
-    // Update existing interaction (created in handleCallRouting) to in-progress
+    // Update existing interaction (created in handleCallRouting) to in-progress + assign agent
     try {
       const interactions = await this.interactionService.findByMetadataCallId(callId);
       for (const interaction of interactions) {
-        if (interaction.status === 'new') {
+        if (interaction.status === 'new' || interaction.status === 'in-progress') {
           await this.interactionService.updateStatus(interaction.id, 'in-progress');
-          this.logger.log(`Interaction ${interaction.displayId} → in-progress (agent answered)`);
+          // Assign/confirm agent who answered
+          if (agentId) {
+            await this.interactionService.assignAgent(interaction.id, agentId, agentId);
+          }
+          this.logger.log(`Interaction ${interaction.displayId} → in-progress, agent=${agentId}`);
         }
       }
     } catch (err) {

@@ -11,16 +11,16 @@ import (
 
 // RecordingManager controls call recording via FreeSWITCH ESL.
 type RecordingManager struct {
-	eslClients   []*esl.InboundClient
+	eslClients   []esl.ESLClient
 	recordingDir string
 	logger       *slog.Logger
 }
 
-func NewRecordingManager(eslClients []*esl.InboundClient, recordingDir string, logger *slog.Logger) *RecordingManager {
+func NewRecordingManager(eslClients []esl.ESLClient, recordingDir string, logger *slog.Logger) *RecordingManager {
 	return &RecordingManager{eslClients: eslClients, recordingDir: recordingDir, logger: logger}
 }
 
-func (m *RecordingManager) esl() *esl.InboundClient {
+func (m *RecordingManager) esl() esl.ESLClient {
 	if len(m.eslClients) == 0 {
 		return nil
 	}

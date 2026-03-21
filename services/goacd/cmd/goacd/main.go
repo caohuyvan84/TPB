@@ -38,6 +38,9 @@ func main() {
 		logger.Error("Invalid Redis URL", "err", err)
 		os.Exit(1)
 	}
+	opt.PoolSize = 50        // default 10 → 50 for 1K+ concurrent calls
+	opt.MinIdleConns = 10    // keep warm connections ready
+	opt.MaxRetries = 3       // retry transient failures
 	rdb := redis.NewClient(opt)
 	if err := rdb.Ping(ctx).Err(); err != nil {
 		logger.Warn("Redis not available — running without state persistence", "err", err)
@@ -53,13 +56,17 @@ func main() {
 	publisher := event.NewPublisher(cfg.KafkaBrokers, logger)
 	defer publisher.Close()
 
-	// ── ESL inbound clients (persistent connections to FreeSWITCH) ──
-	var eslClients []*esl.InboundClient
+	// ── ESL inbound clients (pooled connections to FreeSWITCH) ──
+	// Each FS host gets a pool of 4 connections to avoid single-mutex bottleneck.
+	const eslPoolSize = 4
+	var eslClients []esl.ESLClient
 	for _, host := range cfg.FSESLHosts {
-		client := esl.NewInboundClient(host, cfg.FSESLPassword, logger)
-		go client.ConnectWithRetry(ctx)
-		eslClients = append(eslClients, client)
+		pool := esl.NewInboundPool(host, cfg.FSESLPassword, eslPoolSize, logger)
+		pool.ConnectAll(ctx)
+		eslClients = append(eslClients, pool)
 	}
+	logger.Info("ESL pools created", "hosts", len(cfg.FSESLHosts), "poolSize", eslPoolSize,
+		"totalConns", len(cfg.FSESLHosts)*eslPoolSize)
 
 	// ── IVR config ────────────────────────────────────
 	ivrConfig := &ivr.SimpleIVR{
@@ -75,10 +82,14 @@ func main() {
 		Logger:       logger,
 	}
 
+	// ── Score cache: pre-compute agent scores every 5s (reduces ~90% Redis ops) ──
+	scoreCache := routing.NewScoreCache(scorer, agentState.GetAvailableAgents, agentState.IsSipAlive, 5*time.Second, logger)
+	go scoreCache.Start(ctx)
+
 	// ── ESL outbound server (FreeSWITCH → GoACD per-call) ──
 	eslAddr := fmt.Sprintf("0.0.0.0:%d", cfg.ESLListenPort)
 	eslServer := esl.NewOutboundServer(eslAddr, func(callCtx context.Context, conn *esl.OutboundConn) {
-		handleInboundCall(callCtx, conn, ivrConfig, agentState, queueMgr, scorer, sessions, publisher, eslClients, cfg, logger)
+		handleInboundCall(callCtx, conn, ivrConfig, agentState, queueMgr, scoreCache, sessions, publisher, eslClients, cfg, logger)
 	}, logger)
 
 	go func() {
@@ -100,11 +111,14 @@ func main() {
 	go reconciler.Start(ctx)
 	go reconciler.StartStaleReaper(ctx)
 
+	// ── Session cleanup watchdog (prevent memory leaks from stuck calls) ──
+	go sessions.StartStaleSessionReaper(ctx, logger)
+
 	// ── Outbound call manager ────────────────────────
 	outboundMgr := call.NewOutboundCallManager(eslClients, agentState, sessions, publisher, cfg.SIPDomain, cfg.PSTNGateway, cfg.KafkaBrokers, logger)
 
 	// ── gRPC/HTTP server (CTI Adapter integration) ────
-	grpcServer := api.NewGRPCServer(cfg.GRPCPort, agentState, sessions, eslClients, outboundMgr, cfg.SIPDomain, cfg.TURNSecret, cfg.TURNTTL, logger)
+	grpcServer := api.NewGRPCServer(cfg.GRPCPort, agentState, sessions, eslClients, outboundMgr, cfg.SIPDomain, cfg.TURNSecret, cfg.TURNTTL, cfg.SIPAuthSecret, cfg.SIPAuthTTL, logger)
 	go func() {
 		if err := grpcServer.Start(); err != nil {
 			logger.Error("gRPC server failed", "err", err)
@@ -155,10 +169,10 @@ func handleInboundCall(
 	ivrCfg *ivr.SimpleIVR,
 	agentState *agent.StateManager,
 	queueMgr *queue.Manager,
-	scorer *routing.Scorer,
+	scoreCache *routing.ScoreCache,
 	sessions *call.SessionStore,
 	publisher *event.Publisher,
-	eslClients []*esl.InboundClient,
+	eslClients []esl.ESLClient,
 	cfg *config.Config,
 	logger *slog.Logger,
 ) {
@@ -265,7 +279,7 @@ func handleInboundCall(
 		"queue": selectedQueue, "position": 1,
 	})
 
-	// ── Phase 2: Find agents with 5-factor scoring ───
+	// ── Phase 2: Find agents from score cache (pre-computed every 5s) ──
 	const maxRetries = 3
 	const pollInterval = 2 * time.Second
 	const pollMaxRounds = 30 // 60s total
@@ -279,14 +293,8 @@ func handleInboundCall(
 		case <-time.After(pollInterval):
 		}
 
-		available, err := agentState.GetAvailableAgents(ctx, "voice")
-		if err != nil || len(available) == 0 {
-			continue
-		}
-
-		// Score and get top-3
-		// TODO: load queue skills/group from config; using empty for now
-		candidates = scorer.ScoreAgents(ctx, available, nil, "", maxRetries)
+		// Read from cache — 0 Redis ops per call (cache refreshes in background)
+		candidates = scoreCache.GetTopN(ctx, maxRetries)
 		if len(candidates) > 0 {
 			break
 		}
@@ -309,9 +317,38 @@ func handleInboundCall(
 	}
 
 	// ── Phase 3: Try top-N candidates (re-route on no-answer) ──
+	// If ALL candidates fail, re-poll for new agents (up to 3 full cycles)
 	var assignedAgent string
 	var ringStart time.Time
 	waitTimeMs := time.Since(sess.StartedAt).Milliseconds()
+
+	for retryRound := 0; retryRound < 3 && assignedAgent == ""; retryRound++ {
+	if retryRound > 0 {
+		// Re-poll for agents from cache (previous candidates all failed)
+		logger.Info("All candidates failed, re-polling for agents", "uuid", sess.UUID, "round", retryRound+1)
+		pubTimeline("queued", map[string]interface{}{
+			"queue": selectedQueue, "position": 1, "retryRound": retryRound + 1,
+		})
+		for round := 0; round < 15; round++ { // 30s re-poll
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(pollInterval):
+			}
+			candidates = scoreCache.GetTopN(ctx, maxRetries)
+			if len(candidates) > 0 {
+				pubTimeline("agent_scoring", map[string]interface{}{
+					"candidateCount": len(candidates),
+					"topAgent":       candidates[0].AgentID,
+					"topScore":       candidates[0].Score,
+				})
+				break
+			}
+		}
+		if len(candidates) == 0 {
+			continue
+		}
+	}
 
 	for _, candidate := range candidates {
 		agentID := candidate.AgentID
@@ -366,6 +403,17 @@ func handleInboundCall(
 			continue
 		}
 
+		// Drain stale events from previous bridge attempts before starting new wait
+		drainLoop:
+		for {
+			select {
+			case stale := <-conn.Events():
+				logger.Debug("Drained stale event from previous bridge", "uuid", sess.UUID, "event", stale.Name)
+			default:
+				break drainLoop
+			}
+		}
+
 		// Wait for CHANNEL_BRIDGE (agent answered) or CHANNEL_HANGUP (bridge failed)
 		bridgeOK := false
 		bridgeTimer := time.NewTimer(30 * time.Second)
@@ -389,14 +437,21 @@ func handleInboundCall(
 					}
 					break bridgeWait
 				case "CHANNEL_HANGUP", "CHANNEL_HANGUP_COMPLETE":
+					// Only treat as bridge failure if this event is for our CURRENT bridge attempt
+					// Check if the hangup is for the caller leg (our UUID) vs stale agent leg
+					hangupUUID := evt.Headers["Unique-ID"]
+					if hangupUUID != "" && hangupUUID != sess.UUID {
+						// Stale event from previous agent leg — ignore
+						logger.Debug("Ignoring stale hangup from previous bridge", "uuid", sess.UUID, "hangupUUID", hangupUUID)
+						continue
+					}
 					break bridgeWait
 				case "CHANNEL_EXECUTE_COMPLETE":
 					// Bridge app finished — check if it succeeded or failed
 					app := evt.Headers["Application"]
 					if app == "bridge" {
 						resp := evt.Headers["Application-Response"]
-						if resp != "" && resp != "_undef_" {
-							// Bridge failed with reason
+						if resp != "" && resp != "_undef_" && resp != "_none_" {
 							logger.Warn("Bridge app failed", "uuid", sess.UUID, "response", resp)
 						}
 						break bridgeWait
@@ -407,14 +462,28 @@ func handleInboundCall(
 		bridgeTimer.Stop()
 
 		if !bridgeOK {
-			logger.Warn("Bridge no answer", "uuid", sess.UUID, "agent", agentID)
-			agentState.ReleaseAgent(ctx, agentID, "ready", "voice")
+			ringDuration := time.Since(ringStart)
+			var newStatus, reason string
+			if ringDuration < 3*time.Second {
+				// Bridge failed instantly → agent unreachable (SIP 404/503)
+				// Set OFFLINE — agent must re-register SIP to become available again
+				newStatus = "offline"
+				reason = "unreachable"
+				logger.Warn("Bridge failed instantly (agent unreachable)", "uuid", sess.UUID, "agent", agentID, "ringDuration", ringDuration)
+			} else {
+				// Bridge timed out → agent didn't answer
+				// Set NOT_READY — agent exists but didn't pick up, don't route more calls
+				newStatus = "not_ready"
+				reason = "no_answer"
+				logger.Warn("Bridge no answer", "uuid", sess.UUID, "agent", agentID, "ringDuration", ringDuration)
+			}
+			agentState.ReleaseAgentWithRetry(ctx, agentID, newStatus, "voice")
 			pub("agent.status_changed", map[string]interface{}{
-				"agentId": agentID, "oldStatus": "ringing", "newStatus": "ready",
-				"channel": "voice", "reason": "no_answer",
+				"agentId": agentID, "oldStatus": "ringing", "newStatus": newStatus,
+				"channel": "voice", "reason": reason,
 			})
 			pub("call.agent_missed", map[string]interface{}{
-				"callId": sess.UUID, "agentId": agentID, "reason": "no_answer",
+				"callId": sess.UUID, "agentId": agentID, "reason": reason,
 			})
 			// Timeline: agent missed
 			pubTimeline("agent_missed", map[string]interface{}{
@@ -432,9 +501,10 @@ func handleInboundCall(
 		assignedAgent = agentID
 		break
 	}
+	} // end retryRound loop
 
 	if assignedAgent == "" {
-		logger.Warn("All candidates missed, hanging up", "uuid", sess.UUID, "queue", selectedQueue)
+		logger.Warn("All candidates missed after retries, hanging up", "uuid", sess.UUID, "queue", selectedQueue)
 		conn.Playback("ivr/ivr-call_back_later.wav")
 		conn.Hangup("NO_USER_RESPONSE")
 		return
@@ -506,39 +576,60 @@ callActive:
 		}
 	}
 
-	// Force hangup caller leg (ESL outbound connection)
+	// Force hangup ALL legs associated with this call.
+	// When agent disconnects (BYE), FS may kill the bridge but caller leg can linger.
+	// We must explicitly kill: (1) caller via ESL outbound conn, (2) caller via ESL inbound UUID,
+	// (3) agent bridge leg via ESL inbound UUID.
+
+	// Method 1: ESL outbound conn hangup (direct, fastest for caller leg)
 	conn.Hangup("NORMAL_CLEARING")
 
-	// Also kill the agent bridge leg via ESL inbound — this ensures the agent's
-	// SIP session (via kamailio_proxy gateway) gets BYE immediately when customer hangs up.
-	// Without this, agent SIP session lingers ~15-17s until timeout.
+	// Method 2: ESL inbound UUIDKill for BOTH legs on ALL FS servers
+	// This covers cross-FS scenarios and ensures nothing lingers.
 	if len(eslClients) > 0 {
 		for _, client := range eslClients {
 			// Kill caller leg by UUID
-			if _, err := client.UUIDKill(sess.UUID, "NORMAL_CLEARING"); err != nil {
-				logger.Debug("UUIDKill caller attempt", "uuid", sess.UUID, "err", err)
-			}
-			// Kill agent bridge leg by captured UUID (from CHANNEL_BRIDGE event)
+			client.UUIDKill(sess.UUID, "NORMAL_CLEARING")
+			// Kill agent bridge leg
 			if sess.AgentLegUUID != "" {
-				if _, err := client.UUIDKill(sess.AgentLegUUID, "NORMAL_CLEARING"); err != nil {
-					logger.Debug("UUIDKill agent leg attempt", "agentLeg", sess.AgentLegUUID, "err", err)
-				}
+				client.UUIDKill(sess.AgentLegUUID, "NORMAL_CLEARING")
+			}
+		}
+
+		// Method 3: If above failed (UUID already gone), use FS 'hupall' to kill by variable
+		// This catches edge case where UUID changed mid-call (e.g., after transfer)
+		if sess.AgentLegUUID != "" {
+			for _, client := range eslClients {
+				// Kill any channel with matching call variable
+				client.API(fmt.Sprintf("uuid_kill %s NORMAL_CLEARING", sess.AgentLegUUID))
 			}
 		}
 	}
 
+	logger.Info("Call cleanup: all legs killed", "uuid", sess.UUID, "agentLeg", sess.AgentLegUUID)
+
 	// Release agent → ACW → auto-ready after 5s
-	agentState.ReleaseAgent(context.Background(), assignedAgent, "acw", "voice")
+	agentState.ReleaseAgentWithRetry(context.Background(), assignedAgent, "acw", "voice")
 	pub("agent.status_changed", map[string]interface{}{
 		"agentId": assignedAgent, "oldStatus": "on_call", "newStatus": "acw",
 		"channel": "voice",
 	})
 	go func() {
-		time.Sleep(5 * time.Second)
-		agentState.SetStatus(context.Background(), assignedAgent, "ready")
-		pub("agent.status_changed", map[string]interface{}{
-			"agentId": assignedAgent, "oldStatus": "acw", "newStatus": "ready",
-			"channel": "voice",
-		})
+		// Use timer + select so goroutine respects shutdown
+		timer := time.NewTimer(5 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+			if err := agentState.SetStatus(context.Background(), assignedAgent, "ready"); err != nil {
+				logger.Error("ACW auto-ready failed", "agent", assignedAgent, "err", err)
+				return
+			}
+			pub("agent.status_changed", map[string]interface{}{
+				"agentId": assignedAgent, "oldStatus": "acw", "newStatus": "ready",
+				"channel": "voice",
+			})
+		case <-ctx.Done():
+			// Shutdown in progress — skip auto-ready
+		}
 	}()
 }

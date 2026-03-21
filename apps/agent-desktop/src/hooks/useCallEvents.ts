@@ -91,6 +91,8 @@ export interface CallEvent {
   score?: number;
   direction?: string;
   reason?: string;
+  hangupCause?: string;
+  sipCode?: string;
   agentStatus?: string;
 }
 

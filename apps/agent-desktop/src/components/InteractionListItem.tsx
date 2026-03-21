@@ -120,16 +120,14 @@ export function InteractionListItem({
     }
   };
 
-  const formatTime = (timestamp: string) => {
-    try {
-      const date = new Date(timestamp);
-      return date.toLocaleTimeString('vi-VN', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      });
-    } catch {
-      return interaction.time || '';
-    }
+  const formatTime = (timestamp: string | undefined | null) => {
+    if (!timestamp) return interaction.time || '';
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return interaction.time || '';
+    return date.toLocaleTimeString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   const getChannelName = (channel: string) => {
@@ -268,9 +266,9 @@ export function InteractionListItem({
               )}
             </div>
             
-            {interaction.duration && (
+            {interaction.duration && interaction.timestamp && (
               <span className="text-xs bg-muted px-2 py-1 rounded">
-                {new Date(interaction.timestamp).toLocaleDateString('en-GB')}
+                {(() => { const d = new Date(interaction.timestamp); return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB'); })()}
               </span>
             )}
           </div>

@@ -69,11 +69,15 @@ export class CallTimelineConsumerService implements OnModuleInit {
 
   /** Link orphan events to interaction (called when interaction is created). */
   async linkOrphanEvents(callId: string, interactionId: string): Promise<number> {
-    const result = await this.timelineRepo.update(
-      { callId, interactionId: undefined as any },
-      { interactionId },
+    const result = await this.timelineRepo.manager.query(
+      `UPDATE call_timeline_events SET interaction_id = $1 WHERE call_id = $2 AND interaction_id IS NULL`,
+      [interactionId, callId],
     );
-    return result.affected || 0;
+    const affected = result[1] || 0;
+    if (affected > 0) {
+      this.logger.log(`Linked ${affected} orphan timeline events for call ${callId}`);
+    }
+    return affected;
   }
 
   /** Get all timeline events for an interaction. */
@@ -101,5 +105,13 @@ export class CallTimelineConsumerService implements OnModuleInit {
     }
 
     return events;
+  }
+
+  /** Get all timeline events by GoACD callId directly (for active calls before interaction exists). */
+  async getByCallId(callId: string): Promise<CallTimelineEvent[]> {
+    return this.timelineRepo.find({
+      where: { callId },
+      order: { timestamp: 'ASC' },
+    });
   }
 }

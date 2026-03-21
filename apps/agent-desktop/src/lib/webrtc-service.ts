@@ -7,6 +7,9 @@ export interface WebRtcCredentials {
   wsUri: string;
   sipUri: string;
   domain: string;
+  authorizationUser?: string;     // Ephemeral HMAC username: "<expiry>:<agentId>"
+  authorizationPassword?: string; // Ephemeral HMAC password: Base64(HMAC-SHA1(secret, username))
+  tokenExpiresAt?: number;        // Unix timestamp when SIP token expires
   iceServers: { urls: string; username?: string; credential?: string }[];
 }
 
@@ -51,8 +54,11 @@ export class WebRtcService {
       this.currentSession.state !== SessionState.Terminated;
   }
 
+  private lastCredentials: WebRtcCredentials | null = null;
+
   /** Register to SIP proxy via WebSocket. */
   async register(credentials: WebRtcCredentials, agentId: string): Promise<void> {
+    this.lastCredentials = credentials;
     // If already registered with same server, just re-send REGISTER (refresh)
     // Don't tear down the entire UA + WebSocket connection
     if (this.ua && this.registerer && this._status === 'registered') {
@@ -81,8 +87,8 @@ export class WebRtcService {
         transportOptions: {
           server: credentials.wsUri,
         },
-        authorizationUsername: agentId,
-        authorizationPassword: '', // Kamailio no-auth for internal profile
+        authorizationUsername: credentials.authorizationUser || agentId,
+        authorizationPassword: credentials.authorizationPassword || '',
         sessionDescriptionHandlerFactoryOptions: {
           peerConnectionConfiguration: {
             iceServers: credentials.iceServers.map(s => {

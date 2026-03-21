@@ -15,10 +15,28 @@ export class SipTabLock {
   private onStatusChange: LockCallback;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
+  private unloadHandler: (() => void) | null = null;
+
   constructor(onStatusChange: LockCallback) {
     this.tabId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     this.onStatusChange = onStatusChange;
     this.channel = new BroadcastChannel(CHANNEL_NAME);
+
+    // On page refresh/close: release lock synchronously BEFORE unload
+    this.unloadHandler = () => {
+      // Stop heartbeat FIRST to prevent it re-writing after remove
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = null;
+      }
+      if (this._isHolder) {
+        localStorage.removeItem(LOCK_KEY);
+        // BroadcastChannel may not deliver during unload, but try anyway
+        try { this.channel.postMessage({ type: 'release', tabId: this.tabId }); } catch {}
+        this._isHolder = false;
+      }
+    };
+    window.addEventListener('beforeunload', this.unloadHandler);
 
     this.channel.onmessage = (event) => {
       const msg = event.data;
@@ -44,16 +62,31 @@ export class SipTabLock {
     return this._isHolder;
   }
 
-  /** Try to acquire the SIP lock. */
+  /** Try to acquire the SIP lock. Retries once after short delay to handle refresh race. */
   tryAcquire(): boolean {
+    if (this.doAcquire()) return true;
+
+    // Retry after 1.5s — handles refresh race condition:
+    // Old tab heartbeat may re-write localStorage AFTER delete, blocking new tab.
+    // After 1.5s the stale heartbeat ages past threshold.
+    setTimeout(() => {
+      if (!this._isHolder) {
+        this.doAcquire();
+      }
+    }, 1500);
+    return false;
+  }
+
+  private doAcquire(): boolean {
     const current = localStorage.getItem(LOCK_KEY);
     const now = Date.now();
 
     if (current) {
       try {
         const holder = JSON.parse(current);
-        // If the current holder's heartbeat is fresh (< 10s), don't steal
-        if (holder.tabId !== this.tabId && now - holder.timestamp < 10000) {
+        // If the current holder's heartbeat is fresh (< 6s) AND it's a different tab, don't steal.
+        // Reduced from 10s to 6s to speed up refresh recovery (heartbeat is 5s interval).
+        if (holder.tabId !== this.tabId && now - holder.timestamp < 6000) {
           this._isHolder = false;
           this.onStatusChange(false);
           return false;
@@ -107,6 +140,10 @@ export class SipTabLock {
 
   /** Cleanup on unmount. */
   destroy(): void {
+    if (this.unloadHandler) {
+      window.removeEventListener('beforeunload', this.unloadHandler);
+      this.unloadHandler = null;
+    }
     this.release();
     this.channel.close();
   }

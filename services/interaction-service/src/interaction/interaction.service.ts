@@ -87,7 +87,7 @@ export class InteractionService {
     cursor?: string;
     limit?: number;
   }) {
-    const take = filters.limit || 50;
+    const take = filters.limit || 200;
     const where: any = {};
 
     if (filters.status) where.status = filters.status;

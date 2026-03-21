@@ -3,23 +3,23 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeor
 @Entity('call_timeline_events')
 export class CallTimelineEvent {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   @Column({ name: 'call_id' })
-  callId: string;
+  callId!: string;
 
   @Column({ name: 'interaction_id', nullable: true })
-  interactionId: string;
+  interactionId!: string;
 
   @Column({ name: 'event_type' })
-  eventType: string;
+  eventType!: string;
 
   @Column({ type: 'timestamptz' })
-  timestamp: Date;
+  timestamp!: Date;
 
   @Column({ type: 'jsonb', default: {} })
-  data: Record<string, unknown>;
+  data!: Record<string, unknown>;
 
   @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
+  createdAt!: Date;
 }

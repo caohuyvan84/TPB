@@ -38,6 +38,10 @@ type Config struct {
 	TURNSecret string
 	TURNTTL    int
 
+	// SIP ephemeral auth (shared secret with Kamailio auth_ephemeral)
+	SIPAuthSecret string
+	SIPAuthTTL    int // seconds, default 300 (5 min)
+
 	// PSTN Gateway (FreeSWITCH gateway name for outbound PSTN calls)
 	PSTNGateway string
 
@@ -60,6 +64,8 @@ func Load() *Config {
 		SIPDomain:     envStr("GOACD_SIP_DOMAIN", "nextgen.omicx.vn"),
 		TURNSecret:    envStr("GOACD_TURN_SECRET", "466f03791a44b531c5129724e50af31a4043e69bdccc741d"),
 		TURNTTL:       envInt("GOACD_TURN_TTL", 86400),
+		SIPAuthSecret: envStr("GOACD_SIP_AUTH_SECRET", "tpb_sip_ephemeral_secret_2026"),
+		SIPAuthTTL:    envInt("GOACD_SIP_AUTH_TTL", 300),
 		PSTNGateway:   envStr("GOACD_PSTN_GATEWAY", ""),
 		ExtRangeStart: envInt("GOACD_EXT_RANGE_START", 1000),
 		ExtRangeEnd:   envInt("GOACD_EXT_RANGE_END", 9999),

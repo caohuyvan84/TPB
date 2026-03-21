@@ -41,7 +41,7 @@ export class Interaction {
   @Column({ nullable: true, name: 'customer_name' })
   customerName?: string;
 
-  @Column({ type: 'uuid', nullable: true, name: 'assigned_agent_id' })
+  @Column({ type: 'varchar', length: 255, nullable: true, name: 'assigned_agent_id' })
   @Index()
   assignedAgentId?: string;
 
@@ -81,11 +81,11 @@ export class Interaction {
   @OneToMany(() => InteractionEvent, (event) => event.interaction)
   events!: InteractionEvent[];
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   @Index()
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt!: Date;
 
   @Column({ type: 'timestamptz', nullable: true, name: 'closed_at' })

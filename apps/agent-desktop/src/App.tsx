@@ -124,6 +124,8 @@ function AppContent() {
 
   // Active call interaction — injected into interaction list during call
   const [activeCallInteraction, setActiveCallInteraction] = useState<any>(null);
+  // Remember the last ended call info so we can find the completed interaction after refresh
+  const [lastEndedCallInfo, setLastEndedCallInfo] = useState<{ phone: string; realId?: string } | null>(null);
 
   // Create/update active call interaction when call state changes
   useEffect(() => {
@@ -167,11 +169,53 @@ function AppContent() {
 
       setActiveCallInteraction(interaction);
       setSelectedInteraction(interaction);
-    } else {
-      // Call ended — clear active interaction
+      setLastEndedCallInfo(null); // clear any pending ended info
+    } else if (activeCallInteraction) {
+      // Call ended — save info for matching after interactions refresh
+      const phone = activeCallInteraction.customerPhone || activeCallInteraction.metadata?.callerNumber || '';
+      const realId = activeCallInteraction.id?.startsWith('live-call-') ? undefined : activeCallInteraction.id;
+      setLastEndedCallInfo({ phone, realId });
       setActiveCallInteraction(null);
     }
-  }, [callControl.incomingCall, callControl.hasActiveCall, currentCall, interactions]);
+  }, [callControl.incomingCall, callControl.hasActiveCall, currentCall]);
+
+  // After call ended: find the completed interaction once interactions list refreshes
+  useEffect(() => {
+    if (!lastEndedCallInfo || activeCallInteraction) return;
+
+    const { phone, realId } = lastEndedCallInfo;
+
+    // Try find by real ID first
+    if (realId) {
+      const byId = interactions.find((i: any) => i.id === realId);
+      if (byId) {
+        setSelectedInteraction(byId);
+        setLastEndedCallInfo(null);
+        return;
+      }
+    }
+
+    // Try find by phone + completed status
+    const completed = interactions.find((i: any) =>
+      i.channel === 'voice' &&
+      (i.status === 'completed' || i.status === 'closed' || i.status === 'resolved') &&
+      i.metadata?.callerNumber === phone
+    );
+    if (completed) {
+      setSelectedInteraction(completed);
+      setLastEndedCallInfo(null);
+      return;
+    }
+
+    // Try find by phone + any status (interaction might not be completed yet)
+    const any = interactions.find((i: any) =>
+      i.channel === 'voice' && i.metadata?.callerNumber === phone
+    );
+    if (any) {
+      setSelectedInteraction(any);
+      setLastEndedCallInfo(null);
+    }
+  }, [interactions, lastEndedCallInfo, activeCallInteraction]);
 
   // Bridge SIP.js call ended → endCall in CallContext
   useEffect(() => {
@@ -193,12 +237,22 @@ function AppContent() {
     addScheduleReminder
   } = useNotifications();
 
-  // Auto-select first interaction when data loads
+  // Auto-select first interaction when data loads (only if nothing selected and no pending ended call)
   useEffect(() => {
-    if (!selectedInteraction && interactions.length > 0) {
+    if (!selectedInteraction && !lastEndedCallInfo && interactions.length > 0) {
       setSelectedInteraction(interactions[0]);
     }
-  }, [interactions, selectedInteraction]);
+  }, [interactions, selectedInteraction, lastEndedCallInfo]);
+
+  // Sync selectedInteraction with latest data from API (e.g., status changes after call end)
+  useEffect(() => {
+    if (selectedInteraction && interactions.length > 0 && !activeCallInteraction && !lastEndedCallInfo) {
+      const updated = interactions.find((i: any) => i.id === selectedInteraction.id);
+      if (updated && updated.status !== selectedInteraction.status) {
+        setSelectedInteraction(updated);
+      }
+    }
+  }, [interactions, selectedInteraction, activeCallInteraction, lastEndedCallInfo]);
 
   const toggleLeftPanel = () => {
     setLeftPanelCollapsed(!leftPanelCollapsed);
@@ -652,10 +706,14 @@ function AppContent() {
 }
 
 export default function App() {
+  const { user } = useAuth();
+  const agentId = user?.agentId || 'AGT001';
+  const agentName = user?.fullName || 'Agent';
+
   return (
     <ConnectionHubProvider>
       <NotificationProvider>
-        <EnhancedAgentStatusProvider agentId="AGT001" agentName="Agent Tung">
+        <EnhancedAgentStatusProvider agentId={agentId} agentName={agentName}>
           <CallProvider>
             <CallControlProvider>
               <SoftphoneProvider>

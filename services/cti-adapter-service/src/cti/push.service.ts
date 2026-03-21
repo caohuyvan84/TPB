@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import Redis from 'ioredis';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const webPush = require('web-push');
 
 /**
  * PushService — manages Web Push subscriptions and sends push notifications.
@@ -9,7 +11,6 @@ import Redis from 'ioredis';
 export class PushService {
   private readonly logger = new Logger(PushService.name);
   private redis: Redis;
-  private webPush: any; // web-push module (loaded dynamically)
   private vapidConfigured = false;
 
   constructor() {
@@ -21,15 +22,9 @@ export class PushService {
     const vapidEmail = process.env['VAPID_EMAIL'] || 'mailto:admin@tpb.vn';
 
     if (vapidPublic && vapidPrivate) {
-      try {
-        // Dynamic import for web-push (may not be installed yet)
-        this.webPush = require('web-push');
-        this.webPush.setVapidDetails(vapidEmail, vapidPublic, vapidPrivate);
-        this.vapidConfigured = true;
-        this.logger.log('Web Push VAPID configured');
-      } catch (err) {
-        this.logger.warn('web-push module not available — push notifications disabled. Install with: npm install web-push');
-      }
+      webPush.setVapidDetails(vapidEmail, vapidPublic, vapidPrivate);
+      this.vapidConfigured = true;
+      this.logger.log('Web Push VAPID configured');
     } else {
       this.logger.warn('VAPID keys not configured — push notifications disabled');
     }
@@ -65,7 +60,7 @@ export class PushService {
    * Checks Layer 1/2 coordination: only push if audio is not active or tab status is stale.
    */
   async sendPush(agentId: string, payload: Record<string, unknown>): Promise<boolean> {
-    if (!this.vapidConfigured || !this.webPush) return false;
+    if (!this.vapidConfigured) return false;
 
     // Layer coordination: skip push if agent tab is active with audio running
     const tabStatus = await this.getTabStatus(agentId);
@@ -86,7 +81,7 @@ export class PushService {
 
     try {
       const subscription = JSON.parse(subJson);
-      await this.webPush.sendNotification(subscription, JSON.stringify(payload), {
+      await webPush.sendNotification(subscription, JSON.stringify(payload), {
         TTL: 25, // seconds — match GoACD bridge timeout
         urgency: 'high',
         topic: payload['callId'] ? `call-${payload['callId']}` : undefined,

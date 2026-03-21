@@ -10,9 +10,12 @@ class PushSubscriptionManager {
   private swRegistration: ServiceWorkerRegistration | null = null;
   private subscription: PushSubscription | null = null;
   private agentId: string | null = null;
+  private initialized = false;
 
-  /** Initialize: register Service Worker + subscribe to push. */
+  /** Initialize: register Service Worker + subscribe to push. Skips if already initialized for same agent. */
   async init(agentId: string): Promise<boolean> {
+    if (this.initialized && this.agentId === agentId) return true;
+
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       console.warn('[PushSub] Service Worker or Push API not supported');
       return false;
@@ -54,6 +57,7 @@ class PushSubscriptionManager {
 
       // Send subscription to CTI Adapter
       await this.sendToServer();
+      this.initialized = true;
       return true;
     } catch (err) {
       console.error('[PushSub] Init failed:', err);
@@ -84,6 +88,7 @@ class PushSubscriptionManager {
     this.subscription = null;
     this.swRegistration = null;
     this.agentId = null;
+    this.initialized = false;
   }
 
   /** Report tab status to server (used for Layer 1/2 coordination). */

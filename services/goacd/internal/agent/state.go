@@ -110,6 +110,26 @@ func (m *StateManager) ReleaseAgent(ctx context.Context, agentID, newStatus, cha
 	return err
 }
 
+// ReleaseAgentWithRetry releases an agent with up to 3 retries on transient Redis failures.
+// Use this instead of ReleaseAgent in call cleanup paths where failure = stuck agent.
+func (m *StateManager) ReleaseAgentWithRetry(ctx context.Context, agentID, newStatus, channel string) {
+	for attempt := 0; attempt < 3; attempt++ {
+		err := m.ReleaseAgent(ctx, agentID, newStatus, channel)
+		if err == nil {
+			return
+		}
+		m.logger.Error("ReleaseAgent failed, retrying",
+			"agent", agentID, "status", newStatus, "attempt", attempt+1, "err", err)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Duration(1<<uint(attempt)) * time.Second): // 1s, 2s, 4s
+		}
+	}
+	m.logger.Error("ReleaseAgent FAILED after 3 retries — agent may be stuck",
+		"agent", agentID, "status", newStatus)
+}
+
 // ClaimAgentOutbound atomically claims an agent for an outbound call (ready → originating).
 func (m *StateManager) ClaimAgentOutbound(ctx context.Context, agentID, interactionID, channel string) (bool, error) {
 	res, err := claimScript.Run(ctx, m.rdb,
@@ -149,7 +169,28 @@ func (m *StateManager) GetState(ctx context.Context, agentID string) (map[string
 	return m.rdb.HGetAll(ctx, hashPrefix+agentID).Result()
 }
 
-// SetStatus updates agent status with transition validation. Resets voice_count when setting ready.
+// setStatusScript atomically updates agent status + available set in one Lua script.
+// Pipeline HSET + SADD can partially fail; Lua script ensures all-or-nothing.
+var setStatusScript = redis.NewScript(`
+local hashKey = KEYS[1]
+local availableKey = KEYS[2]
+local agentId = ARGV[1]
+local newStatus = ARGV[2]
+local nowMs = ARGV[3]
+
+redis.call('HSET', hashKey, 'status', newStatus, 'status_changed_at', nowMs)
+
+if newStatus == 'ready' then
+  redis.call('HSET', hashKey, 'voice_count', '0')
+  redis.call('HDEL', hashKey, 'current_interaction')
+  redis.call('SADD', availableKey, agentId)
+else
+  redis.call('SREM', availableKey, agentId)
+end
+return 1
+`)
+
+// SetStatus updates agent status atomically (Lua script: hash + available set in one transaction).
 func (m *StateManager) SetStatus(ctx context.Context, agentID, status string) error {
 	// Validate transition if agent already has a state
 	current, err := m.rdb.HGet(ctx, hashPrefix+agentID, "status").Result()
@@ -157,20 +198,45 @@ func (m *StateManager) SetStatus(ctx context.Context, agentID, status string) er
 		if !IsValidTransition(current, status) {
 			m.logger.Warn("Invalid state transition rejected",
 				"agent", agentID, "from", current, "to", status)
-			// Allow it anyway for now but log warning — strict enforcement later
 		}
 	}
 
-	pipe := m.rdb.Pipeline()
-	key := hashPrefix + agentID
-	pipe.HSet(ctx, key, "status", status, "status_changed_at", fmt.Sprintf("%d", time.Now().UnixMilli()))
-	if status == StateReady {
-		pipe.HSet(ctx, key, "voice_count", "0")
-		pipe.HDel(ctx, key, "current_interaction")
-		pipe.SAdd(ctx, availablePrefix+"voice", agentID)
-	} else {
-		pipe.SRem(ctx, availablePrefix+"voice", agentID)
-	}
-	_, err = pipe.Exec(ctx)
+	_, err = setStatusScript.Run(ctx, m.rdb,
+		[]string{hashPrefix + agentID, availablePrefix + "voice"},
+		agentID, status, fmt.Sprintf("%d", time.Now().UnixMilli()),
+	).Int()
 	return err
+}
+
+// UpdateSipHeartbeat stores SIP registration status + heartbeat timestamp.
+// Frontend sends this every 30s. GoACD uses it to filter dead agents from routing.
+func (m *StateManager) UpdateSipHeartbeat(ctx context.Context, agentID string, sipRegistered bool) error {
+	key := hashPrefix + agentID
+	regVal := "0"
+	if sipRegistered {
+		regVal = "1"
+	}
+	return m.rdb.HSet(ctx, key,
+		"sip_registered", regVal,
+		"sip_heartbeat_at", fmt.Sprintf("%d", time.Now().UnixMilli()),
+	).Err()
+}
+
+// IsSipAlive checks if agent has fresh SIP heartbeat (within maxAge).
+func (m *StateManager) IsSipAlive(ctx context.Context, agentID string, maxAgeMs int64) bool {
+	vals, err := m.rdb.HMGet(ctx, hashPrefix+agentID, "sip_registered", "sip_heartbeat_at").Result()
+	if err != nil || len(vals) < 2 {
+		return false
+	}
+	reg, _ := vals[0].(string)
+	hbStr, _ := vals[1].(string)
+	if reg != "1" {
+		return false
+	}
+	if hbStr == "" {
+		return false
+	}
+	var hbMs int64
+	fmt.Sscanf(hbStr, "%d", &hbMs)
+	return (time.Now().UnixMilli() - hbMs) < maxAgeMs
 }

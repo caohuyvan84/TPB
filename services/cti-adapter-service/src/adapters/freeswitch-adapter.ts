@@ -93,4 +93,8 @@ export class FreeSwitchAdapter implements ICtiAdapter {
     const resp = await fetch(url);
     return resp.json();
   }
+
+  async sipHeartbeat(agentId: string, sipRegistered: boolean): Promise<any> {
+    return this.rpc('SipHeartbeat', { agentId, sipRegistered });
+  }
 }

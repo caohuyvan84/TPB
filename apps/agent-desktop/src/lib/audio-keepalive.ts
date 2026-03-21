@@ -26,28 +26,28 @@ class AudioKeepAlive {
   }
 
   /**
-   * Request start. If user has already interacted, starts immediately.
-   * Otherwise waits for the next click/keypress to create AudioContext.
+   * Request start. Always waits for user gesture to avoid Chrome AudioContext warning.
+   * The gesture listener fires on next click/keypress and creates AudioContext.
    */
   start() {
-    if (this.ctx) return; // already running
+    if (this.ctx && (this.ctx.state as string) === 'running') return; // already running
     this.wantStart = true;
-
-    // Try to create immediately — works if user already clicked something
-    if (this.tryCreate()) return;
-
-    // Otherwise wait for user gesture
     this.setState('suspended');
+
+    // Always use gesture handler — never create AudioContext eagerly.
+    // This avoids: "The AudioContext was not allowed to start" warning.
     if (!this.gestureHandler) {
       this.gestureHandler = () => {
         if (this.wantStart && !this.ctx) {
           this.tryCreate();
+        } else if (this.ctx && (this.ctx.state as string) === 'suspended') {
+          this.ctx.resume();
         }
         this.removeGestureListeners();
       };
       document.addEventListener('click', this.gestureHandler, { once: true, capture: true });
       document.addEventListener('keydown', this.gestureHandler, { once: true, capture: true });
-      console.log('[AudioKeepAlive] Waiting for user gesture to start');
+      document.addEventListener('touchstart', this.gestureHandler, { once: true, capture: true });
     }
   }
 

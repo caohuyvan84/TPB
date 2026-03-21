@@ -5,6 +5,7 @@ import { apiClient } from '@/lib/api-client';
 import { networkMonitor } from '@/lib/network-monitor';
 import { audioKeepAlive } from '@/lib/audio-keepalive';
 import { pushSubscription } from '@/lib/push-subscription';
+import { ctiApi } from '@/lib/cti-api';
 
 const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 const RE_REGISTER_INTERVAL = 4 * 60 * 1000; // 4 minutes
@@ -102,7 +103,14 @@ export function useWebRTC(agentId: string | undefined) {
         setIncomingCall(null);
       },
       onTransportDisconnected: () => {
-        // SIP transport lost — schedule reconnect immediately (don't wait for 4min interval)
+        // SIP transport lost — notify server IMMEDIATELY so calls don't route to us
+        const aid = agentIdRef.current;
+        if (aid) {
+          ctiApi.setAgentState(aid, 'not_ready').catch(() => {
+            console.warn('[useWebRTC] Failed to set not_ready on SIP disconnect');
+          });
+        }
+        // Then schedule reconnect
         scheduleReconnect('transport_disconnected');
       },
     });
@@ -146,23 +154,62 @@ export function useWebRTC(agentId: string | undefined) {
     return () => clearInterval(interval);
   }, [agentId, isTabHolder, doRegister]);
 
-  // AudioKeepAlive + Push Subscription: start when SIP registered, stop when unregistered
+  // Push Subscription — init once when agentId available (independent of SIP status)
   useEffect(() => {
-    if (status === 'registered' && agentIdRef.current) {
-      // Layer 1: silent audio keepalive (defers AudioContext creation until user gesture)
+    if (!agentId) return;
+    pushSubscription.init(agentId);
+  }, [agentId]);
+
+  // AudioKeepAlive + Agent Ready/NotReady based on SIP status
+  useEffect(() => {
+    const aid = agentIdRef.current;
+    if (status === 'registered' && aid) {
+      // Layer 1: silent audio keepalive
       audioKeepAlive.start();
-      // Layer 2: Web Push backup
-      pushSubscription.init(agentIdRef.current);
-    } else if (status === 'disconnected' || status === 'error') {
+      // Report tab status for Web Push layer coordination (suppress push when tab active)
+      pushSubscription.reportTabStatus(true, true);
+      // Set agent ready in GoACD Redis (so calls can be routed to this agent)
+      ctiApi.setAgentState(aid, 'ready').catch(() => {
+        console.warn('[useWebRTC] Failed to set agent ready — calls may not route');
+      });
+      // Send SIP heartbeat to GoACD (for stale detection server-side)
+      ctiApi.updateSipHeartbeat(aid, true).catch(() => {});
+    } else if ((status === 'disconnected' || status === 'error') && aid) {
       audioKeepAlive.stop();
+      pushSubscription.reportTabStatus(false, false);
+      // CRITICAL: Notify server that agent is NOT reachable — remove from routing
+      ctiApi.setAgentState(aid, 'not_ready').catch(() => {});
+      ctiApi.updateSipHeartbeat(aid, false).catch(() => {});
     }
   }, [status]);
+
+  // Report tab visibility changes for Web Push layer coordination
+  useEffect(() => {
+    if (!agentId) return;
+    const handler = () => {
+      pushSubscription.reportTabStatus(
+        audioKeepAlive.state === 'running',
+        status === 'registered',
+      );
+    };
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
+  }, [agentId, status]);
 
   // Track AudioKeepAlive state
   useEffect(() => {
     const unsub = audioKeepAlive.subscribe(setBgProtection);
     return unsub;
   }, []);
+
+  // SIP heartbeat: send every 30s to GoACD so server knows agent is alive + SIP registered
+  useEffect(() => {
+    if (!agentId || !isTabHolder || status !== 'registered') return;
+    const heartbeat = setInterval(() => {
+      ctiApi.updateSipHeartbeat(agentId, true).catch(() => {});
+    }, 30_000);
+    return () => clearInterval(heartbeat);
+  }, [agentId, isTabHolder, status]);
 
   // Network recovery → re-register
   useEffect(() => {
@@ -189,7 +236,12 @@ export function useWebRTC(agentId: string | undefined) {
     const healthCheck = setInterval(() => {
       if (serviceRef.current && !serviceRef.current.isStillRegistered()) {
         if (networkMonitor.getState() !== 'offline') {
-          console.log('[useWebRTC] Health check: SIP not registered, reconnecting');
+          console.log('[useWebRTC] Health check: SIP not registered, setting not_ready + reconnecting');
+          // Notify server BEFORE reconnect — prevent calls routing to us while re-registering
+          const aid = agentIdRef.current;
+          if (aid) {
+            ctiApi.setAgentState(aid, 'not_ready').catch(() => {});
+          }
           scheduleReconnect('health_check_failed');
         }
       }
